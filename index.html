@@ -3,7 +3,11 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#4F46E5">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="/manifest.json">
     <title>Sentinel Pump Radar</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -14,42 +18,35 @@
             color: #1E293B;
             margin: 0;
             overflow: hidden;
+            -webkit-tap-highlight-color: transparent;
         }
         .mono {
             font-family: 'JetBrains Mono', monospace;
         }
         ::-webkit-scrollbar {
-            width: 5px;
-            height: 5px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #F1F5F9;
+            width: 4px;
         }
         ::-webkit-scrollbar-thumb {
             background: #CBD5E1;
             border-radius: 10px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #94A3B8;
         }
         #root {
             height: 100vh;
             display: flex;
             flex-direction: column;
         }
-        .glass-card {
-            background: rgba(255, 255, 255, 0.8);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
         }
-        .pump-aura {
-            box-shadow: 0 0 20px rgba(239, 68, 68, 0.2);
-            animation: pulse-red 2s infinite;
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(0,0,0,0.05);
+            border-radius: 10px;
         }
-        @keyframes pulse-red {
-            0% { border-color: rgba(239, 68, 68, 0.3); }
-            50% { border-color: rgba(239, 68, 68, 0.8); }
-            100% { border-color: rgba(239, 68, 68, 0.3); }
+        /* Mobile safe area padding */
+        @supports (padding: env(safe-area-inset-bottom)) {
+            nav {
+                padding-bottom: env(safe-area-inset-bottom);
+            }
         }
     </style>
 <script type="importmap">
@@ -67,5 +64,12 @@
 </head>
 <body>
     <div id="root"></div>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js');
+        });
+      }
+    </script>
 </body>
 </html>
