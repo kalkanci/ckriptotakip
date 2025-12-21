@@ -5,19 +5,18 @@ import { LLMAnalysis, MarketTicker, Kline } from "../types";
 export const llmService = {
   analyzePump: async (ticker: MarketTicker, history: Kline[]): Promise<LLMAnalysis | null> => {
     try {
-      // Create a new GoogleGenAI instance right before making an API call.
-      // Always use process.env.API_KEY directly as per @google/genai guidelines.
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
-      const prompt = `Analiz Edilecek Kripto Varlık: ${ticker.symbol}
-Fiyat: ${ticker.lastPrice}
-24S Değişim: %${ticker.priceChangePercent}
-Hacim: ${ticker.volume}
+      const prompt = `Varlık: ${ticker.symbol}
+Şu anki fiyat: ${ticker.lastPrice}
+Yükseliş oranı: %${ticker.priceChangePercent}
 
-Son mum verileri:
-${history.slice(-30).map(k => `O:${k.open},H:${k.high},L:${k.low},C:${k.close},V:${k.volume}`).join('\n')}
+Mum Verileri:
+${history.slice(-30).map(k => `${k.close > k.open ? 'Yükseliş' : 'Düşüş'} Fiyat:${k.close}`).join('\n')}
 
-Lütfen bir SHORT pozisyonu için analiz yap. Sadece JSON formatında yanıt ver.`;
+Lütfen bu durumu çok basit, finansal terimlerden uzak, sanki bir arkadaşına anlatıyormuş gibi yorumla. 
+Yükselişin yorulup yorulmadığını ve fiyatın aşağı düşme ihtimalini (SHORT) değerlendir.
+Sadece JSON formatında yanıt ver.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
@@ -27,8 +26,14 @@ Lütfen bir SHORT pozisyonu için analiz yap. Sadece JSON formatında yanıt ver
           responseSchema: {
             type: Type.OBJECT,
             properties: {
-              score: { type: Type.NUMBER },
-              rationale_tr: { type: Type.STRING },
+              score: { 
+                type: Type.NUMBER,
+                description: "0 ile 1 arası düşüş ihtimali puanı. 1 çok yüksek ihtimal." 
+              },
+              rationale_tr: { 
+                type: Type.STRING, 
+                description: "Yeni başlayanlar için basit, samimi ve anlaşılır analiz açıklaması." 
+              },
               confidence: { type: Type.NUMBER },
               risk_estimate: { type: Type.NUMBER },
               top_features: { type: Type.ARRAY, items: { type: Type.STRING } },
@@ -40,11 +45,10 @@ Lütfen bir SHORT pozisyonu için analiz yap. Sadece JSON formatında yanıt ver
             },
             required: ["score", "rationale_tr", "confidence", "risk_estimate", "top_features"]
           },
-          systemInstruction: "Sen profesyonel bir teknik analistsin. Sadece JSON yanıt ver."
+          systemInstruction: "Sen kripto para dünyasını yeni öğrenen birine rehberlik eden, samimi ve teknik terimlerden kaçınan bir analiz uzmanısın. Yanıtlarını sadece JSON olarak ver."
         }
       });
 
-      // Directly access .text property from GenerateContentResponse
       const text = response.text;
       return text ? JSON.parse(text) : null;
     } catch (error) {
