@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#4F46E5">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="manifest" href="/manifest.json">
+    <link rel="manifest" href="manifest.json">
     <title>Sentinel Pump Radar</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -64,10 +64,15 @@
 </head>
 <body>
     <div id="root"></div>
+    <!-- Vercel Beyaz Ekran Çözümü: Uygulamanın giriş noktası olan modülün eklenmesi şarttır -->
+    <script src="index.tsx" type="module"></script>
     <script>
+      // ServiceWorker Kayıt Hatası Çözümü: Görece yol kullanımı ve hata yakalama
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js');
+          navigator.serviceWorker.register('./sw.js')
+            .then(reg => console.log('SW Registered:', reg.scope))
+            .catch(err => console.warn('SW registration failed (Normal in preview):', err));
         });
       }
     </script>
