@@ -5,14 +5,9 @@ import { LLMAnalysis, MarketTicker, Kline } from "../types";
 export const llmService = {
   analyzePump: async (ticker: MarketTicker, history: Kline[]): Promise<LLMAnalysis | null> => {
     try {
-      // Vercel/Browser ortamında ReferenceError: process is not defined hatasını önle
-      const apiKey = (typeof process !== 'undefined' && process.env?.API_KEY) || "";
-      if (!apiKey) {
-        console.warn("API Key bulunamadı.");
-        return null;
-      }
-
-      const ai = new GoogleGenAI({ apiKey });
+      // Create a new GoogleGenAI instance right before making an API call.
+      // Always use process.env.API_KEY directly as per @google/genai guidelines.
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
       const prompt = `Analiz Edilecek Kripto Varlık: ${ticker.symbol}
 Fiyat: ${ticker.lastPrice}
@@ -49,6 +44,7 @@ Lütfen bir SHORT pozisyonu için analiz yap. Sadece JSON formatında yanıt ver
         }
       });
 
+      // Directly access .text property from GenerateContentResponse
       const text = response.text;
       return text ? JSON.parse(text) : null;
     } catch (error) {

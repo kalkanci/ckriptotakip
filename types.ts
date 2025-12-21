@@ -18,6 +18,19 @@ export interface Kline {
   volume: number;
 }
 
+export interface NewsItem {
+  title: string;
+  source: string;
+  url: string;
+  published_at: string;
+}
+
+export interface FuturesMetrics {
+  fundingRate: number;
+  openInterest: number;
+  liquidations24h?: number;
+}
+
 export interface LLMAnalysis {
   score: number;
   rationale_tr: string;
@@ -27,14 +40,6 @@ export interface LLMAnalysis {
   recommended_params?: {
     take_profit_price: number;
   };
-}
-
-export interface PumpCandidate {
-  symbol: string;
-  lastPrice: number;
-  score: number;
-  priceJump: number;
-  volumeMultiplier: number;
 }
 
 export interface UserSettings {
@@ -52,28 +57,7 @@ export interface UserSettings {
   telegramBotToken: string;
   telegramChatId: string;
   isNotificationEnabled: boolean;
-  isWebNotificationEnabled: boolean; // Yeni: Tarayıcı bildirimleri
-}
-
-export interface Position {
-  symbol: string;
-  entryPrice: number;
-  markPrice: number;
-  size: number;
-  notional: number;
-  initialNotional: number;
-  executedSteps: number[];
-  stage: string;
-  pnl: number;
-  pnlPercentage: number;
-  realizedPnl: number;
-  timestamp: number;
-  lastHigh: number;
-  liqPrice: number;
-  isPartialSold: boolean;
-  soldRatios: number[];
-  totalFees: number;
-  liqDistance: number;
+  isWebNotificationEnabled: boolean;
 }
 
 export interface MarketTicker {
@@ -91,4 +75,26 @@ export interface OrderLog {
   symbol?: string;
   action: 'SCANNING' | 'ALERT' | 'INFO' | 'SUCCESS' | 'WARNING' | 'TELEGRAM_SENT';
   message: string;
+}
+
+// Added Position interface to resolve compilation error in PositionList.tsx
+export interface Position {
+  symbol: string;
+  stage: string;
+  liqPrice: number;
+  executedSteps: number[];
+  notional: number;
+  pnlPercentage: number;
+  pnl: number;
+  realizedPnl: number;
+  totalFees: number;
+}
+
+// Added PumpCandidate interface to resolve compilation error in PumpScanner.tsx
+export interface PumpCandidate {
+  symbol: string;
+  lastPrice: number;
+  score: number;
+  priceJump: number;
+  volumeMultiplier: number;
 }

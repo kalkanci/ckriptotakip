@@ -1,6 +1,6 @@
 
 import { CONFIG } from '../constants';
-import { TradeMode, Kline } from '../types';
+import { TradeMode, Kline, FuturesMetrics } from '../types';
 
 type MessageHandler = (data: any) => void;
 
@@ -9,6 +9,7 @@ class BinanceService {
   private ws: WebSocket | null = null;
   private mode: TradeMode = CONFIG.DEFAULT_MODE;
   private handlers: Set<MessageHandler> = new Set();
+  private fapiBase = 'https://fapi.binance.com/fapi/v1';
 
   private constructor() {}
 
@@ -32,7 +33,6 @@ class BinanceService {
       this.handlers.forEach(handler => handler(data));
     };
     this.ws.onclose = () => {
-      console.log('WS Connection closed, retrying...');
       setTimeout(() => this.connect(), 5000);
     };
   }
@@ -49,6 +49,26 @@ class BinanceService {
     return () => this.handlers.delete(handler);
   }
 
+  public async getFuturesMetrics(symbol: string): Promise<FuturesMetrics | null> {
+    try {
+      // Binance Futures API ücretsizdir ve anahtar gerektirmez
+      const [fundingRes, oiRes] = await Promise.all([
+        fetch(`${this.fapiBase}/premiumIndex?symbol=${symbol}`),
+        fetch(`${this.fapiBase}/openInterest?symbol=${symbol}`)
+      ]);
+      
+      const fundingData = await fundingRes.json();
+      const oiData = await oiRes.json();
+
+      return {
+        fundingRate: parseFloat(fundingData.lastFundingRate || '0'),
+        openInterest: parseFloat(oiData.openInterest || '0')
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+
   public async getHistory(symbol: string, interval: string = '1m', limit: number = 100): Promise<Kline[]> {
     const url = `${CONFIG.BINANCE_SPOT_HTTP}/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
     try {
@@ -63,19 +83,8 @@ class BinanceService {
         volume: parseFloat(d[5]),
       }));
     } catch (e) { 
-      console.error('History fetch failed', e);
       return []; 
     }
-  }
-
-  public async executeBuy(symbol: string, qty: number) {
-    await new Promise(r => setTimeout(r, 400));
-    return { id: Math.random().toString(36).substr(2, 9), status: 'FILLED' };
-  }
-
-  public async executeSell(symbol: string, qty: number) {
-    await new Promise(r => setTimeout(r, 400));
-    return { id: Math.random().toString(36).substr(2, 9), status: 'FILLED' };
   }
 }
 
