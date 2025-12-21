@@ -6,20 +6,27 @@ import {
   ArrowUpRight, ArrowDownRight, Info, Gauge, 
   Search, Brain, ShieldAlert, Target, Loader2,
   BarChart3, Layers, BookOpen, MessageSquare,
-  History, Smartphone
+  History, Smartphone, BellRing, Layout
 } from 'lucide-react';
 import { OrderLog, MarketTicker, UserSettings, LLMAnalysis, Kline } from './types';
 import { binanceService } from './services/binanceService';
 import { llmService } from './services/llmService';
 
 const App: React.FC = () => {
-  // Verileri telefonun yerel hafızasından (localStorage) yükle
-  // Bu işlem PWA yapısında verilerin telefonda yedekli kalmasını sağlar.
   const [userSettings, setUserSettings] = useState<UserSettings>(() => {
     try {
       const saved = localStorage.getItem('sentinel_pro_settings');
       if (saved) {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        // Default değerleri korumak için merge et
+        return { 
+          riskPercent: 10, leverage: 5, maxNotional: 1150, dailyLossLimit: 25,
+          buyScoreThreshold: 0.5, buyJumpThreshold: 80, ptpTargets: [], dcaSteps: [],
+          autoOptimize: true, liqProtectionThreshold: 5, liqReductionRatio: 25,
+          telegramBotToken: '', telegramChatId: '', isNotificationEnabled: true,
+          isWebNotificationEnabled: false,
+          ...parsed 
+        };
       }
     } catch (e) {
       console.error("Yerel ayarlar yüklenemedi:", e);
@@ -28,11 +35,11 @@ const App: React.FC = () => {
       riskPercent: 10, leverage: 5, maxNotional: 1150, dailyLossLimit: 25,
       buyScoreThreshold: 0.5, buyJumpThreshold: 80, ptpTargets: [], dcaSteps: [],
       autoOptimize: true, liqProtectionThreshold: 5, liqReductionRatio: 25,
-      telegramBotToken: '', telegramChatId: '', isNotificationEnabled: true
+      telegramBotToken: '', telegramChatId: '', isNotificationEnabled: true,
+      isWebNotificationEnabled: false
     };
   });
 
-  // Ayarlar her değiştiğinde telefona (localStorage) yedekle
   useEffect(() => {
     localStorage.setItem('sentinel_pro_settings', JSON.stringify(userSettings));
   }, [userSettings]);
@@ -60,7 +67,6 @@ const App: React.FC = () => {
   const alertedCoins = useRef<Record<string, number>>({});
   const tickerBuffer = useRef<Record<string, MarketTicker>>({});
 
-  // Logları ve Sinyal Sayısını Yedekle
   useEffect(() => {
     localStorage.setItem('sentinel_pro_logs', JSON.stringify(logs.slice(0, 20)));
     localStorage.setItem('sentinel_alert_count', alertCount.toString());
@@ -76,15 +82,34 @@ const App: React.FC = () => {
     } as any, ...prev].slice(0, 50));
   }, []);
 
+  // Web Bildirimi Gönder
+  const triggerWebNotification = (symbol: string, change: number) => {
+    if (!userSettings.isWebNotificationEnabled || !("Notification" in window)) return;
+    
+    if (Notification.permission === "granted") {
+      const notification = new Notification(`🚀 Sentinel: ${symbol} PUMP!`, {
+        body: `%${change.toFixed(2)} artış tespit edildi. Analiz için tıkla.`,
+        icon: 'https://cdn-icons-png.flaticon.com/512/2091/2091665.png',
+        badge: 'https://cdn-icons-png.flaticon.com/512/2091/2091665.png',
+        tag: symbol, // Aynı coin için bildirimleri grupla
+      });
+      notification.onclick = () => {
+        window.focus();
+        handleQuickAnalysis(symbol);
+      };
+    }
+  };
+
   const sendTelegramNotification = async (symbol: string, change: number, price: number, metrics: { volX: string, jumpSpeed: string, imbalance: number }) => {
+    // Hem Telegram hem Web bildirimi tetikle
+    triggerWebNotification(symbol, change);
+
     if (!userSettings.telegramBotToken || !userSettings.telegramChatId || !userSettings.isNotificationEnabled) return;
     const now = Date.now();
     
-    // Aynı coin için 15 dakikada bir sinyal gönderimi (Spam önleyici)
     if (alertedCoins.current[symbol] && (now - alertedCoins.current[symbol] < 15 * 60 * 1000)) return;
 
     try {
-      // Son 4 saatlik 5 mum verisi çek
       const h4 = await binanceService.getHistory(symbol, '4h', 5);
       const h4Text = h4.reverse().map((k, i) => {
         const diff = ((k.close - k.open) / k.open * 100).toFixed(2);
@@ -114,11 +139,24 @@ const App: React.FC = () => {
       if (res.ok) {
         alertedCoins.current[symbol] = now;
         setAlertCount(prev => prev + 1);
-        addLog(`[Telegram] ${symbol} raporu iletildi.`, 'TELEGRAM_SENT');
+        addLog(`[Sinyal] ${symbol} bildirimi iletildi.`, 'TELEGRAM_SENT');
       }
     } catch (error) {
-      addLog(`Telegram hatası! Bağlantıyı kontrol edin.`, 'WARNING');
+      addLog(`Bildirim hatası!`, 'WARNING');
     }
+  };
+
+  const requestNotificationPermission = async () => {
+    if (!("Notification" in window)) {
+      addLog("Tarayıcı bildirimleri desteklenmiyor.", "WARNING");
+      return false;
+    }
+    const permission = await Notification.requestPermission();
+    if (permission === "granted") {
+      addLog("Bildirim izni onaylandı.", "SUCCESS");
+      return true;
+    }
+    return false;
   };
 
   const handleQuickAnalysis = async (symbol: string) => {
@@ -199,9 +237,12 @@ const App: React.FC = () => {
               <span>{isTelegramConfigured ? 'SENTINEL AKTİF' : 'YAPILANDIRILMADI'}</span>
            </div>
         </div>
-        <button onClick={() => setIsSettingsOpen(true)} className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors">
-           <Settings size={18} className="text-slate-400" />
-        </button>
+        <div className="flex items-center space-x-2">
+          {userSettings.isWebNotificationEnabled && <BellRing size={16} className="text-indigo-600 animate-bounce" />}
+          <button onClick={() => setIsSettingsOpen(true)} className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors">
+            <Settings size={18} className="text-slate-400" />
+          </button>
+        </div>
       </header>
 
       {/* MAIN */}
@@ -214,7 +255,7 @@ const App: React.FC = () => {
                  {scanningData.length === 0 ? (
                    <div className="col-span-full flex flex-col items-center justify-center py-20 opacity-30">
                       <Loader2 className="animate-spin mb-4" />
-                      <span className="text-xs font-black uppercase tracking-widest">Piyasa Verisi Bekleniyor...</span>
+                      <span className="text-xs font-black uppercase tracking-widest text-center">Binance API Bağlanıyor...<br/>Sinyaller Bekleniyor</span>
                    </div>
                  ) : (
                    scanningData.map(c => {
@@ -272,33 +313,30 @@ const App: React.FC = () => {
            <div className="space-y-6 pt-4">
               <div className="bg-indigo-600 rounded-[2.5rem] p-8 text-white shadow-xl relative overflow-hidden">
                  <div className="relative z-10">
-                    <span className="text-[10px] font-black uppercase tracking-[0.3em] opacity-70">Toplam Bildirim Sayısı</span>
+                    <span className="text-[10px] font-black uppercase tracking-[0.3em] opacity-70">Toplam Sinyal Sayısı</span>
                     <div className="text-6xl font-black italic tracking-tighter mt-2">{alertCount}</div>
                  </div>
                  <Smartphone size={100} className="absolute -right-4 -bottom-4 opacity-10 -rotate-12" />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                 <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm">
-                    <span className="text-[10px] font-black text-indigo-500 uppercase block mb-2">Vol-X Sistemi</span>
-                    <p className="text-[10px] text-slate-500 font-bold leading-relaxed italic">Hacim artış çarpanı. 5x üzeri değerler aşırı talebi işaret eder.</p>
-                 </div>
-                 <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm">
-                    <span className="text-[10px] font-black text-emerald-500 uppercase block mb-2">Orderbook Denge</span>
-                    <p className="text-[10px] text-slate-500 font-bold leading-relaxed italic">Alıcı/Satıcı dengesi. %80 üzeri güçlü pump momentumunu gösterir.</p>
-                 </div>
-                 <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm">
-                    <span className="text-[10px] font-black text-amber-500 uppercase block mb-2">Fiyat İvmesi</span>
-                    <p className="text-[10px] text-slate-500 font-bold leading-relaxed italic">Yükseliş dikliği. Hızın ne kadar sürdürülebilir olduğunu analiz eder.</p>
-                 </div>
+              <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm flex items-center space-x-4">
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${userSettings.isWebNotificationEnabled ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
+                    <BellRing size={24} />
+                  </div>
+                  <div>
+                    <span className="text-xs font-black uppercase tracking-widest text-slate-900 block">PWA Bildirim Widget'ı</span>
+                    <p className="text-[10px] text-slate-500 font-bold leading-relaxed">
+                      {userSettings.isWebNotificationEnabled ? 'Tarayıcı bildirimleri AKTİF. Arka planda bile sinyal alırsınız.' : 'Bildirimler kapalı. Ayarlar sekmesinden aktif edebilirsiniz.'}
+                    </p>
+                  </div>
               </div>
 
               <div className="bg-slate-900 rounded-[2rem] p-6 text-white/70 font-mono text-[10px]">
                  <div className="flex items-center space-x-2 mb-4 opacity-50">
                     <Terminal size={14} />
-                    <span className="uppercase tracking-[0.2em]">Cihaz Kayıtları (Local Storage)</span>
+                    <span className="uppercase tracking-[0.2em]">Cihaz Kayıtları</span>
                  </div>
-                 <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
+                 <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
                     {logs.length === 0 ? (
                       <div className="text-slate-500 italic">Henüz kayıt bulunamadı...</div>
                     ) : (
@@ -321,7 +359,7 @@ const App: React.FC = () => {
               <div className="p-6 border-b border-slate-50 flex justify-between items-center shrink-0">
                  <div>
                     <h3 className="font-black text-lg uppercase tracking-tighter">{analyzingSymbol}</h3>
-                    <p className="text-[9px] text-slate-400 font-black uppercase">4H Mum Geçmişi & AI Görüşü</p>
+                    <p className="text-[9px] text-slate-400 font-black uppercase">Fiyat Geçmişi & AI Görüşü</p>
                  </div>
                  <button onClick={() => setAnalyzingSymbol(null)} className="p-2 bg-slate-50 rounded-xl hover:bg-red-50 hover:text-red-500 transition-colors"><X size={20}/></button>
               </div>
@@ -330,13 +368,13 @@ const App: React.FC = () => {
                  {isAnalyzing ? (
                    <div className="flex flex-col items-center py-20">
                       <Loader2 className="animate-spin text-indigo-600 mb-4" size={32} />
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Binance Verileri İşleniyor...</span>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sinyal Analiz Ediliyor...</span>
                    </div>
                  ) : (
                     <div className="space-y-6">
                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                           <span className="text-[9px] font-black text-slate-400 uppercase block mb-3 tracking-widest flex items-center">
-                            <History size={10} className="mr-1" /> SON 5 MUM (4 SAATLİK)
+                            <History size={10} className="mr-1" /> SON 5 MUM (4S)
                           </span>
                           <div className="space-y-2">
                              {history4h.slice(0, 5).reverse().map((k, idx) => {
@@ -344,7 +382,7 @@ const App: React.FC = () => {
                                 const isPos = parseFloat(diff) >= 0;
                                 return (
                                    <div key={idx} className="flex justify-between text-[11px] font-mono border-b border-white pb-1 last:border-0">
-                                      <span className="text-slate-400">P-{idx}</span>
+                                      <span className="text-slate-400">T-{idx}</span>
                                       <span className="font-bold text-slate-700">${k.close.toFixed(4)}</span>
                                       <span className={`font-black ${isPos ? 'text-emerald-500' : 'text-red-500'}`}>%{isPos ? '+' : ''}{diff}</span>
                                    </div>
@@ -353,7 +391,7 @@ const App: React.FC = () => {
                           </div>
                        </div>
                        
-                       {analysisResult ? (
+                       {analysisResult && (
                          <>
                             <div className="flex justify-between items-end">
                                <div>
@@ -369,11 +407,6 @@ const App: React.FC = () => {
                                <p className="text-xs text-indigo-900 leading-relaxed italic">"{analysisResult.rationale_tr}"</p>
                             </div>
                          </>
-                       ) : (
-                         <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 flex items-center space-x-2">
-                            <Info size={16} className="text-amber-500" />
-                            <p className="text-[10px] text-amber-700 font-bold uppercase">AI Analizi için API anahtarı gerekiyor veya kota dolmuş olabilir.</p>
-                         </div>
                        )}
                     </div>
                  )}
@@ -398,28 +431,58 @@ const App: React.FC = () => {
       {/* SETTINGS */}
       {isSettingsOpen && (
         <div className="fixed inset-0 z-[400] flex items-end lg:items-center justify-center bg-slate-900/60 backdrop-blur-md">
-           <div className="bg-white w-full max-w-xl rounded-t-[3rem] lg:rounded-[3.5rem] p-8 shadow-3xl animate-in slide-in-from-bottom duration-500">
+           <div className="bg-white w-full max-w-xl rounded-t-[3rem] lg:rounded-[3.5rem] p-8 shadow-3xl animate-in slide-in-from-bottom duration-500 overflow-y-auto max-h-[90vh] custom-scrollbar">
               <div className="flex justify-between items-center mb-8">
-                 <h3 className="font-black text-xl uppercase tracking-tighter italic">Güvenli Yedekleme</h3>
+                 <h3 className="font-black text-xl uppercase tracking-tighter italic">Sentinel Pro Ayarları</h3>
                  <button onClick={()=>setIsSettingsOpen(false)} className="p-3 bg-slate-50 rounded-2xl text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"><X size={20}/></button>
               </div>
-              <div className="space-y-4">
-                 <div>
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Telegram Bot Token</label>
-                    <input type="password" value={userSettings.telegramBotToken} onChange={e => setUserSettings({...userSettings, telegramBotToken: e.target.value})} placeholder="7483...:AAH..." className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-mono focus:bg-white focus:border-indigo-500 outline-none transition-all"/>
+              
+              <div className="space-y-6">
+                 {/* WEB BİLDİRİM WIDGET AYARI */}
+                 <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                    <div className="flex items-center justify-between mb-2">
+                       <div className="flex items-center space-x-2">
+                          <Layout size={18} className="text-indigo-600" />
+                          <span className="text-xs font-black uppercase tracking-widest">Bildirim & Widget</span>
+                       </div>
+                       <div 
+                         onClick={async () => {
+                           const enabled = !userSettings.isWebNotificationEnabled;
+                           if (enabled) {
+                             const granted = await requestNotificationPermission();
+                             if (granted) setUserSettings({...userSettings, isWebNotificationEnabled: true});
+                           } else {
+                             setUserSettings({...userSettings, isWebNotificationEnabled: false});
+                           }
+                         }}
+                         className={`w-12 h-6 rounded-full transition-all cursor-pointer relative ${userSettings.isWebNotificationEnabled ? 'bg-indigo-600' : 'bg-slate-300'}`}
+                       >
+                          <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${userSettings.isWebNotificationEnabled ? 'left-7' : 'left-1'}`} />
+                       </div>
+                    </div>
+                    <p className="text-[10px] text-slate-500 font-bold leading-relaxed italic">Tarayıcı bildirimleri, uygulama kapalı olsa dahi sizi uyarır. (PWA özelliği)</p>
                  </div>
-                 <div>
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Chat ID</label>
-                    <input type="text" value={userSettings.telegramChatId} onChange={e => setUserSettings({...userSettings, telegramChatId: e.target.value})} placeholder="-100..." className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-mono focus:bg-white focus:border-indigo-500 outline-none transition-all"/>
+
+                 {/* TELEGRAM AYARLARI */}
+                 <div className="space-y-4">
+                    <div>
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Telegram Bot Token</label>
+                        <input type="password" value={userSettings.telegramBotToken} onChange={e => setUserSettings({...userSettings, telegramBotToken: e.target.value})} placeholder="7483...:AAH..." className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-mono focus:bg-white focus:border-indigo-500 outline-none transition-all"/>
+                    </div>
+                    <div>
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Chat ID</label>
+                        <input type="text" value={userSettings.telegramChatId} onChange={e => setUserSettings({...userSettings, telegramChatId: e.target.value})} placeholder="-100..." className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-mono focus:bg-white focus:border-indigo-500 outline-none transition-all"/>
+                    </div>
+                    <div>
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block flex justify-between">
+                          <span>Sinyal Eşiği</span>
+                          <span className="text-indigo-600 font-black">%{userSettings.buyJumpThreshold}</span>
+                        </label>
+                        <input type="range" min="10" max="250" value={userSettings.buyJumpThreshold} onChange={e => setUserSettings({...userSettings, buyJumpThreshold: Number(e.target.value)})} className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600 mt-2"/>
+                    </div>
                  </div>
-                 <div>
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block flex justify-between">
-                       <span>Bildirim Eşiği</span>
-                       <span className="text-indigo-600 font-black">%{userSettings.buyJumpThreshold}</span>
-                    </label>
-                    <input type="range" min="10" max="250" value={userSettings.buyJumpThreshold} onChange={e => setUserSettings({...userSettings, buyJumpThreshold: Number(e.target.value)})} className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600 mt-2"/>
-                 </div>
-                 <button onClick={()=>setIsSettingsOpen(false)} className="w-full py-5 bg-indigo-600 text-white rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest shadow-xl shadow-indigo-200 mt-4 hover:bg-indigo-700 active:scale-95 transition-all">DEĞİŞİKLİKLERİ YEDEKLE</button>
+
+                 <button onClick={()=>setIsSettingsOpen(false)} className="w-full py-5 bg-indigo-600 text-white rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest shadow-xl shadow-indigo-200 mt-4 hover:bg-indigo-700 active:scale-95 transition-all">KAYDET VE YEDEKLE</button>
               </div>
            </div>
         </div>

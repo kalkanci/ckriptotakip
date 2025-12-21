@@ -9,7 +9,6 @@ export interface PTPTarget {
   ratio: number;
 }
 
-// Added Kline interface for Binance history data
 export interface Kline {
   time: number;
   open: number;
@@ -19,7 +18,6 @@ export interface Kline {
   volume: number;
 }
 
-// Added LLMAnalysis interface for AI insights and parameter recommendations
 export interface LLMAnalysis {
   score: number;
   rationale_tr: string;
@@ -31,7 +29,6 @@ export interface LLMAnalysis {
   };
 }
 
-// Added PumpCandidate interface for market scanner
 export interface PumpCandidate {
   symbol: string;
   lastPrice: number;
@@ -46,16 +43,16 @@ export interface UserSettings {
   maxNotional: number;
   dailyLossLimit: number;
   buyScoreThreshold: number;
-  buyJumpThreshold: number; // Pump Bildirim Eşiği (%)
+  buyJumpThreshold: number;
   ptpTargets: PTPTarget[];
   dcaSteps: number[];
   autoOptimize: boolean;
   liqProtectionThreshold: number;
   liqReductionRatio: number;
-  // Telegram Ayarları
   telegramBotToken: string;
   telegramChatId: string;
   isNotificationEnabled: boolean;
+  isWebNotificationEnabled: boolean; // Yeni: Tarayıcı bildirimleri
 }
 
 export interface Position {
