@@ -1,0 +1,5 @@
+{
+  "name": "Sentinel Pump Intelligence",
+  "description": "24 saatlik değişimi %80'i aşan kaldıraçlı (Margin) coinleri anlık olarak tespit eden ve Telegram üzerinden raporlayan akıllı tarayıcı.",
+  "requestFramePermissions": []
+}
