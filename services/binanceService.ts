@@ -9,7 +9,7 @@ class BinanceService {
   private ws: WebSocket | null = null;
   private mode: TradeMode = CONFIG.DEFAULT_MODE;
   private handlers: Set<MessageHandler> = new Set();
-  private fapiBase = 'https://fapi.binance.com/fapi/v1';
+  private fapiBase = CONFIG.BINANCE_FUTURES_HTTP;
 
   private constructor() {}
 
@@ -27,7 +27,8 @@ class BinanceService {
   }
 
   public connect() {
-    this.ws = new WebSocket(`${CONFIG.BINANCE_SPOT_WS}/!ticker@arr`);
+    // USD-M Futures Tüm Market Ticker yayınına bağlan
+    this.ws = new WebSocket(`${CONFIG.BINANCE_FUTURES_WS}/!ticker@arr`);
     this.ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
       this.handlers.forEach(handler => handler(data));
@@ -51,7 +52,6 @@ class BinanceService {
 
   public async getFuturesMetrics(symbol: string): Promise<FuturesMetrics | null> {
     try {
-      // Binance Futures API ücretsizdir ve anahtar gerektirmez
       const [fundingRes, oiRes] = await Promise.all([
         fetch(`${this.fapiBase}/premiumIndex?symbol=${symbol}`),
         fetch(`${this.fapiBase}/openInterest?symbol=${symbol}`)
@@ -70,7 +70,8 @@ class BinanceService {
   }
 
   public async getHistory(symbol: string, interval: string = '1m', limit: number = 100): Promise<Kline[]> {
-    const url = `${CONFIG.BINANCE_SPOT_HTTP}/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+    // Futures Klines endpoint'i kullanılıyor
+    const url = `${this.fapiBase}/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
     try {
       const res = await fetch(url);
       const data = await res.json();

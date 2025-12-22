@@ -4,12 +4,12 @@ import { TradeMode } from './types';
 export const CONFIG = {
   DEFAULT_MODE: TradeMode.DEMO,
   BINANCE_SPOT_HTTP: 'https://api.binance.com/api/v3',
+  BINANCE_FUTURES_HTTP: 'https://fapi.binance.com/fapi/v1',
   BINANCE_SPOT_WS: 'wss://stream.binance.com:9443/ws',
+  BINANCE_FUTURES_WS: 'wss://fstream.binance.com/ws',
   
   STRATEGY: {
-    // Maliyet Düşürme Adımları (Düşüş Oranı %) - Ayarlar ekranından ezilebilir
     SCALE_STEPS: [2.5, 5.5, 10.0, 18.0, 28.0, 38.0, 50.0], 
-    // Alım Miktarı Çarpanları
     SCALE_SIZES: [1.0, 1.5, 2.5, 4.0, 6.0, 8.5, 12.0],    
     PROFIT_ADD_THRESHOLD: 0.02,           
     MIN_PRICE_ELIGIBILITY: 0.000001,
