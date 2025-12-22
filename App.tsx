@@ -9,7 +9,7 @@ import {
   History, Smartphone, BellRing, Layout, Globe,
   BarChart, TrendingUp, Newspaper, HelpCircle,
   Clock, Hash, ArrowUpDown, Filter, TrendingDown,
-  Cloud, CloudLightning, ExternalLink
+  Cloud, CloudLightning, ExternalLink, ChevronRight
 } from 'lucide-react';
 import { OrderLog, MarketTicker, UserSettings, LLMAnalysis, Kline, FuturesMetrics } from './types';
 import { binanceService } from './services/binanceService';
@@ -32,10 +32,9 @@ const App: React.FC = () => {
   const [scanningData, setScanningData] = useState<MarketTicker[]>([]);
   const [allFutures, setAllFutures] = useState<MarketTicker[]>([]);
   
-  // Arama ve Sıralama
   const [searchQuery, setSearchQuery] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: keyof MarketTicker, direction: 'asc' | 'desc' }>({ key: 'priceChangePercent', direction: 'desc' });
-  const [filterType, setFilterType] = useState<'all' | 'gainers' | 'losers' | 'highVolume'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'gainers' | 'losers'>('all');
 
   const [analyzingSymbol, setAnalyzingSymbol] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<LLMAnalysis | null>(null);
@@ -83,14 +82,15 @@ const App: React.FC = () => {
     const prev = telegramMessageRef.current[symbol];
     if (prev && (now - prev.time < 10000)) return;
 
-    const text = `🚨 *${symbol} TAKİBİ* (CANLI)\n\n` +
-                 `📈 Artış: %${change.toFixed(2)}\n` +
+    const text = `🚀 *${symbol} AKTİF TAKİP*\n\n` +
+                 `📈 Değişim: %${change.toFixed(2)}\n` +
                  `💵 Fiyat: $${price}\n` +
                  `⏰ Güncelleme: ${new Date().toLocaleTimeString('tr-TR')}\n\n` +
-                 `⚡️ Sentinel USD-M Futures Bot`;
+                 `⚡️ Sentinel Akıllı Radar (10sn Güncelleme)`;
 
     try {
       if (prev?.id) {
+        // Mesajı güncelle (öncekini silmiş gibi davranır, sohbeti kirletmez)
         const res = await fetch(`https://api.telegram.org/bot${userSettings.telegramBotToken}/editMessageText`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -104,6 +104,7 @@ const App: React.FC = () => {
         if (res.ok) telegramMessageRef.current[symbol] = { id: prev.id, time: now };
         else delete telegramMessageRef.current[symbol];
       } else {
+        // Yeni mesaj gönder
         const res = await fetch(`https://api.telegram.org/bot${userSettings.telegramBotToken}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -142,7 +143,7 @@ const App: React.FC = () => {
     if (searchQuery) result = result.filter(c => c.symbol.toLowerCase().includes(searchQuery.toLowerCase()));
     if (filterType === 'gainers') result = result.filter(c => c.priceChangePercent > 0);
     else if (filterType === 'losers') result = result.filter(c => c.priceChangePercent < 0);
-    else if (filterType === 'highVolume') result = result.filter(c => c.volume > 100000000);
+    
     result.sort((a, b) => {
       const valA = a[sortConfig.key];
       const valB = b[sortConfig.key];
@@ -151,156 +152,199 @@ const App: React.FC = () => {
     return result;
   }, [allFutures, searchQuery, sortConfig, filterType]);
 
-  const toggleSort = (key: keyof MarketTicker) => setSortConfig(prev => ({ key, direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc' }));
-
   return (
-    <div className="flex flex-col h-screen bg-[#F0F4F8] text-slate-900 overflow-hidden font-sans">
-      {/* HEADER */}
-      <header className="h-16 bg-white border-b flex items-center justify-between px-6 shrink-0 shadow-sm z-50">
+    <div className="flex flex-col h-screen bg-[#F8FAFC] text-slate-900 overflow-hidden font-sans">
+      {/* MOBILE HEADER */}
+      <header className="h-14 bg-white border-b flex items-center justify-between px-5 shrink-0 z-50">
         <div className="flex items-center space-x-2">
-          <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white font-black shadow-lg">S</div>
-          <div>
-            <span className="font-black text-sm uppercase tracking-tighter block">SENTINEL LIVE</span>
-            <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest flex items-center">
-              <Cloud size={10} className="mr-1" /> Sunucu Modu Destekli
-            </span>
-          </div>
+          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-black shadow-lg">S</div>
+          <span className="font-bold text-sm tracking-tight">SENTINEL RADAR</span>
         </div>
-        <button onClick={() => setIsSettingsOpen(true)} className="p-2.5 bg-slate-50 border rounded-2xl hover:bg-slate-100 transition-all">
-          <Settings size={20} className="text-slate-400" />
+        <button onClick={() => setIsSettingsOpen(true)} className="p-2 bg-slate-50 border border-slate-100 rounded-xl">
+          <Settings size={18} className="text-slate-500" />
         </button>
       </header>
 
-      {/* MAIN */}
-      <main className="flex-1 overflow-y-auto px-4 pt-4 pb-28 custom-scrollbar">
+      {/* CONTENT AREA */}
+      <main className="flex-1 overflow-y-auto px-4 pt-3 pb-24 custom-scrollbar bg-slate-50/50">
         {activeTab === 'radar' ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="space-y-3">
+            <div className="flex items-center space-x-2 px-1 mb-2">
+               <Zap size={14} className="text-amber-500 fill-amber-500" />
+               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Anlık %30+ Sıçramalar</span>
+            </div>
             {scanningData.length === 0 ? (
-              <div className="col-span-full flex flex-col items-center justify-center py-24 text-slate-400 bg-white/50 rounded-[3rem] border-2 border-dashed border-slate-200">
-                <Loader2 className="animate-spin mb-4 text-emerald-500" size={40} />
-                <span className="text-sm font-black uppercase tracking-widest text-center italic">Yüksek Hacimli %30+ Pump Bekleniyor...</span>
+              <div className="py-20 flex flex-col items-center justify-center bg-white rounded-3xl border border-dashed border-slate-200">
+                <Loader2 className="animate-spin text-indigo-500 mb-3" size={32} />
+                <span className="text-xs font-bold text-slate-400">Piyasada büyük hareket bekleniyor...</span>
               </div>
             ) : (
               scanningData.map((c) => (
-                <div key={c.symbol} onClick={() => handleQuickAnalysis(c.symbol)} className={`bg-gradient-to-br ${c.priceChangePercent >= 50 ? 'from-emerald-700 to-emerald-600 text-white' : 'from-emerald-400 to-emerald-300 text-emerald-950'} rounded-[2.5rem] p-6 shadow-2xl transition-all active:scale-95 cursor-pointer relative overflow-hidden group`}>
-                  <div className="flex justify-between items-start relative z-10">
-                    <div><span className="font-black text-2xl uppercase tracking-tighter">{c.symbol.replace('USDT','')}</span><div className="text-xs font-bold opacity-80 mt-1 italic">${c.lastPrice}</div></div>
-                    <div className="text-4xl font-black italic tracking-tighter">%{c.priceChangePercent.toFixed(0)}</div>
+                <div key={c.symbol} onClick={() => handleQuickAnalysis(c.symbol)} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm active:scale-[0.98] transition-all flex items-center justify-between group">
+                  <div className="flex items-center space-x-4">
+                     <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 font-black text-sm">{c.symbol.replace('USDT','')[0]}</div>
+                     <div>
+                        <div className="font-black text-base uppercase tracking-tighter text-slate-900">{c.symbol.replace('USDT','')}</div>
+                        <div className="text-[11px] font-bold text-slate-400 italic mt-0.5">${c.lastPrice}</div>
+                     </div>
                   </div>
-                  <div className="mt-4 flex items-center justify-between relative z-10 opacity-70">
-                    <div className="text-[10px] font-black uppercase flex items-center"><Clock size={12} className="mr-1" /> CANLI</div>
-                    <div className="flex items-center space-x-1 text-[10px] font-black uppercase bg-black/10 px-3 py-1.5 rounded-full"><Brain size={12} /><span>ANALİZ</span></div>
+                  <div className="text-right">
+                     <div className="text-2xl font-black italic text-indigo-600 tracking-tighter">%{c.priceChangePercent.toFixed(0)}</div>
+                     <div className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest flex items-center justify-end"><Clock size={10} className="mr-1"/> ANALİZ ET</div>
                   </div>
                 </div>
               ))
             )}
           </div>
         ) : (
-          <div className="space-y-4">
-            <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-200 flex flex-col md:flex-row gap-4">
-              <div className="flex-1 relative"><Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input type="text" placeholder="Sembol ara (BTC, PEPE...)" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-3 pl-12 pr-4 text-sm font-bold focus:bg-white focus:border-emerald-500 outline-none transition-all"/></div>
-              <div className="flex gap-2">
-                {(['all', 'gainers', 'losers', 'highVolume'] as const).map(type => (
-                  <button key={type} onClick={() => setFilterType(type)} className={`px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${filterType === type ? 'bg-emerald-600 text-white' : 'bg-slate-50 text-slate-400 border border-slate-100'}`}>
-                    {type === 'all' ? 'Hepsi' : type === 'gainers' ? 'Yükselen' : type === 'losers' ? 'Düşen' : 'Hacimli'}
+          <div className="space-y-3">
+            {/* SEARCH & FILTER */}
+            <div className="sticky top-0 z-20 bg-[#F8FAFC]/80 backdrop-blur-md pb-2">
+              <div className="relative mb-2">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <input 
+                  type="text" 
+                  placeholder="Sembol ara..." 
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-2xl py-3 pl-11 pr-4 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/10 transition-all shadow-sm"
+                />
+              </div>
+              <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                {(['all', 'gainers', 'losers'] as const).map(type => (
+                  <button 
+                    key={type} 
+                    onClick={() => setFilterType(type)} 
+                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase whitespace-nowrap transition-all border ${filterType === type ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-500 border-slate-200'}`}
+                  >
+                    {type === 'all' ? 'Hepsi' : type === 'gainers' ? 'Yükselen' : 'Düşen'}
                   </button>
                 ))}
+                <button onClick={() => setSortConfig(prev => ({ key: 'priceChangePercent', direction: prev.direction === 'desc' ? 'asc' : 'desc' }))} className="px-4 py-2 rounded-xl text-[10px] font-black uppercase bg-white text-slate-500 border border-slate-200 flex items-center space-x-1">
+                   <ArrowUpDown size={12} /> <span>Sırala</span>
+                </button>
               </div>
             </div>
-            <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-xl border border-slate-200">
-               <div className="overflow-x-auto">
-                 <table className="w-full text-left">
-                   <thead className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b">
-                     <tr>
-                       <th className="p-6 cursor-pointer" onClick={() => toggleSort('symbol')}>Varlık <ArrowUpDown size={12} className="inline"/></th>
-                       <th className="p-6 cursor-pointer" onClick={() => toggleSort('lastPrice')}>Fiyat <ArrowUpDown size={12} className="inline"/></th>
-                       <th className="p-6 cursor-pointer" onClick={() => toggleSort('priceChangePercent')}>24S Değişim <ArrowUpDown size={12} className="inline"/></th>
-                       <th className="p-6 cursor-pointer" onClick={() => toggleSort('volume')}>Hacim <ArrowUpDown size={12} className="inline"/></th>
-                     </tr>
-                   </thead>
-                   <tbody className="divide-y divide-slate-50">
-                      {filteredAndSortedList.map(c => (
-                        <tr key={c.symbol} onClick={() => handleQuickAnalysis(c.symbol)} className="group hover:bg-slate-50 cursor-pointer transition-colors">
-                           <td className="p-6 font-black text-sm">{c.symbol.replace('USDT','')}</td>
-                           <td className="p-6 font-mono text-xs font-bold text-slate-500">${c.lastPrice}</td>
-                           <td className={`p-6 text-sm font-black italic ${c.priceChangePercent >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>%{c.priceChangePercent.toFixed(2)}</td>
-                           <td className="p-6 text-xs font-black text-slate-400">${(c.volume / 1000000).toFixed(1)}M</td>
-                        </tr>
-                      ))}
-                   </tbody>
-                 </table>
-               </div>
+
+            {/* MOBILE LIST CARDS */}
+            <div className="grid grid-cols-1 gap-2">
+              {filteredAndSortedList.slice(0, 100).map(c => (
+                <div key={c.symbol} onClick={() => handleQuickAnalysis(c.symbol)} className="bg-white p-4 rounded-2xl border border-slate-100 flex items-center justify-between active:bg-slate-50 transition-colors">
+                  <div className="flex items-center space-x-3">
+                    <span className="font-black text-sm text-slate-800 tracking-tight">{c.symbol.replace('USDT','')}</span>
+                    <span className="text-[10px] font-mono text-slate-400">${c.lastPrice}</span>
+                  </div>
+                  <div className={`text-sm font-black italic flex items-center space-x-1 ${c.priceChangePercent >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                    <span>%{c.priceChangePercent.toFixed(2)}</span>
+                    <ChevronRight size={14} className="opacity-30" />
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
       </main>
 
-      {/* ANALYSIS MODAL */}
+      {/* SIMPLIFIED DETAIL MODAL */}
       {(analyzingSymbol || isAnalyzing) && (
-        <div className="fixed inset-0 z-[300] bg-slate-900/90 backdrop-blur-2xl flex items-center justify-center p-4">
-           <div className="bg-white w-full max-w-lg rounded-[4rem] overflow-hidden shadow-3xl flex flex-col max-h-[90vh] animate-in zoom-in duration-300">
-              <div className="p-8 border-b flex justify-between items-center bg-slate-50/50">
-                 <div><h3 className="font-black text-3xl uppercase tracking-tighter text-slate-900">{analyzingSymbol}</h3><div className="flex items-center space-x-2 mt-1"><div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping" /><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ASİSTAN RAPORU</span></div></div>
-                 <button onClick={() => setAnalyzingSymbol(null)} className="p-4 bg-white border border-slate-100 rounded-3xl text-slate-400 hover:text-red-500 transition-all"><X size={28}/></button>
+        <div className="fixed inset-0 z-[1000] bg-slate-900/40 backdrop-blur-sm flex items-end sm:items-center justify-center">
+           <div className="bg-white w-full max-w-md rounded-t-[3rem] sm:rounded-[3rem] overflow-hidden shadow-2xl animate-in slide-in-from-bottom duration-300 flex flex-col max-h-[85vh]">
+              <div className="p-6 border-b flex justify-between items-center bg-white sticky top-0 z-10">
+                 <div>
+                    <h3 className="font-black text-2xl uppercase tracking-tighter text-indigo-600">{analyzingSymbol}</h3>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ASİSTAN RAPORU</div>
+                 </div>
+                 <button onClick={() => setAnalyzingSymbol(null)} className="p-3 bg-slate-50 rounded-2xl text-slate-400"><X size={20}/></button>
               </div>
-              <div className="flex-1 overflow-y-auto p-10 space-y-10 custom-scrollbar">
-                {isAnalyzing ? <div className="flex flex-col items-center py-24"><Loader2 className="animate-spin text-emerald-600 mb-8" size={60} /><span className="text-base font-black uppercase tracking-[0.3em] text-slate-400">Veriler İşleniyor...</span></div> : (
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+                {isAnalyzing ? (
+                   <div className="py-20 flex flex-col items-center"><Loader2 className="animate-spin text-indigo-600 mb-4" size={40}/><span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Veriler Okunuyor...</span></div>
+                ) : (
                   <>
-                    <div className="bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100">
-                       <div className="flex items-center justify-between mb-6 text-slate-400"><div className="flex items-center space-x-2"><Clock size={18} /><span className="text-[11px] font-black uppercase tracking-widest">15 DAKİKALIK FİYAT BİLGİSİ</span></div><span className="text-[9px] font-black opacity-40 uppercase italic">CANLI</span></div>
-                       <div className="space-y-4">{history15m.map((k, i) => { const change = ((k.close - k.open) / k.open * 100); return ( <div key={i} className="flex justify-between items-center bg-white p-5 rounded-2xl border border-slate-50 shadow-sm"><span className="text-[11px] font-black text-slate-400 uppercase italic">{i === 0 ? 'ŞİMDİ' : `${i*15} DK ÖNCE`}</span><div className="text-right"><div className="text-sm font-black text-slate-900 font-mono">${k.close}</div><span className={`text-[10px] font-black ${change >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>%{change >= 0 ? '+' : ''}{change.toFixed(2)}</span></div></div> ); })}</div>
+                    {/* 15m PRICE HISTORY LIST */}
+                    <div className="space-y-3">
+                       <div className="flex items-center space-x-2 text-slate-400 mb-1 px-1">
+                          <Clock size={14} />
+                          <span className="text-[10px] font-black uppercase tracking-widest">SON 15 DK ARALIKLARI</span>
+                       </div>
+                       {history15m.map((k, i) => {
+                         const change = ((k.close - k.open) / k.open * 100);
+                         return (
+                           <div key={i} className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 flex justify-between items-center">
+                             <span className="text-[11px] font-bold text-slate-400 uppercase italic">{i === 0 ? 'ŞİMDİ' : `${i*15} DK ÖNCE`}</span>
+                             <div className="flex items-center space-x-3">
+                                <span className="text-sm font-mono font-bold text-slate-700">${k.close}</span>
+                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg ${change >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+                                  %{change >= 0 ? '+' : ''}{change.toFixed(2)}
+                                </span>
+                             </div>
+                           </div>
+                         );
+                       })}
                     </div>
-                    {analysisResult && <div className="bg-slate-900 rounded-[3rem] p-10 text-white relative overflow-hidden shadow-2xl"><div className="flex justify-between items-center mb-8 relative z-10"><div className="flex items-center space-x-3"><Brain size={24} className="text-emerald-400" /><span className="text-[11px] font-black uppercase tracking-[0.3em]">AI YORUMU</span></div><div className="bg-emerald-500 text-white px-5 py-2 rounded-full text-sm font-black shadow-lg shadow-emerald-500/20">PUAN: {(analysisResult.score*100).toFixed(0)}</div></div><p className="text-base leading-relaxed italic opacity-90 relative z-10 font-medium">"{analysisResult.rationale_tr}"</p><Brain size={180} className="absolute -right-12 -bottom-12 opacity-5 rotate-12" /></div>}
+
+                    {/* AI ANALİZİ */}
+                    {analysisResult && (
+                      <div className="bg-indigo-600 p-6 rounded-[2.5rem] text-white shadow-xl shadow-indigo-200 relative overflow-hidden">
+                         <div className="flex items-center space-x-2 mb-4 relative z-10">
+                            <Brain size={18} />
+                            <span className="text-[10px] font-black uppercase tracking-widest">SENTINEL AI</span>
+                         </div>
+                         <p className="text-sm leading-relaxed font-medium italic opacity-95 relative z-10">
+                           "{analysisResult.rationale_tr}"
+                         </p>
+                         <div className="mt-5 flex items-center justify-between relative z-10">
+                            <div className="bg-white/20 backdrop-blur-md px-3 py-1.5 rounded-xl text-[10px] font-black">PUAN: {(analysisResult.score*100).toFixed(0)}</div>
+                            <div className="text-[9px] font-bold opacity-40 uppercase italic tracking-widest">Yatırım Tavsiyesi Değildir</div>
+                         </div>
+                         <Brain size={120} className="absolute -right-6 -bottom-6 opacity-10 rotate-12" />
+                      </div>
+                    )}
                   </>
                 )}
               </div>
-              <div className="p-10 bg-slate-50 border-t shrink-0"><button onClick={() => setAnalyzingSymbol(null)} className="w-full py-6 bg-emerald-600 text-white rounded-[2rem] font-black uppercase text-xs tracking-[0.4em] shadow-2xl active:scale-95 transition-all">TAKİBİ KAPAT</button></div>
+              <div className="p-6 bg-white border-t">
+                 <button onClick={() => setAnalyzingSymbol(null)} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg shadow-indigo-200 active:scale-95 transition-all">TAKİBİ KAPAT</button>
+              </div>
            </div>
         </div>
       )}
 
-      {/* NAV */}
-      <nav className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center bg-white border p-3 rounded-[3rem] shadow-2xl z-[100]">
-         <button onClick={() => setActiveTab('radar')} className={`flex items-center justify-center space-x-3 h-16 rounded-[2.5rem] transition-all duration-500 ${activeTab === 'radar' ? 'w-44 bg-emerald-600 text-white' : 'w-16 text-slate-400'}`}><ListFilter size={24} />{activeTab === 'radar' && <span className="text-xs font-black uppercase tracking-widest">Radar</span>}</button>
-         <div className="w-[1px] h-8 bg-slate-100 mx-4" />
-         <button onClick={() => setActiveTab('list')} className={`flex items-center justify-center space-x-3 h-16 rounded-[2.5rem] transition-all duration-500 ${activeTab === 'list' ? 'w-44 bg-emerald-600 text-white' : 'w-16 text-slate-400'}`}><Hash size={24} />{activeTab === 'list' && <span className="text-xs font-black uppercase tracking-widest">Piyasa</span>}</button>
+      {/* MOBILE BOTTOM NAV */}
+      <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center bg-white/90 backdrop-blur-3xl border border-slate-100 p-2 rounded-[2.5rem] shadow-xl z-[100] w-[280px]">
+         <button onClick={() => setActiveTab('radar')} className={`flex-1 flex items-center justify-center space-x-2 h-12 rounded-[2rem] transition-all duration-300 ${activeTab === 'radar' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400'}`}>
+            <ListFilter size={18} />
+            {activeTab === 'radar' && <span className="text-[11px] font-black uppercase tracking-wider">RADAR</span>}
+         </button>
+         <button onClick={() => setActiveTab('list')} className={`flex-1 flex items-center justify-center space-x-2 h-12 rounded-[2rem] transition-all duration-300 ${activeTab === 'list' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-400'}`}>
+            <Hash size={18} />
+            {activeTab === 'list' && <span className="text-[11px] font-black uppercase tracking-wider">LİSTE</span>}
+         </button>
       </nav>
 
-      {/* SETTINGS */}
+      {/* SETTINGS PANEL */}
       {isSettingsOpen && (
-        <div className="fixed inset-0 z-[400] flex items-end lg:items-center justify-center bg-slate-900/70 backdrop-blur-md">
-           <div className="bg-white w-full max-w-xl rounded-t-[4rem] lg:rounded-[4rem] p-12 shadow-3xl animate-in slide-in-from-bottom duration-500 custom-scrollbar overflow-y-auto max-h-[90vh]">
-              <div className="flex justify-between items-center mb-10">
-                 <h3 className="font-black text-3xl uppercase tracking-tighter italic text-slate-900">Sentinel Yönetim</h3>
-                 <button onClick={()=>setIsSettingsOpen(false)} className="p-4 bg-slate-50 rounded-3xl hover:bg-red-50 transition-all"><X size={28}/></button>
+        <div className="fixed inset-0 z-[2000] flex items-end bg-slate-900/50 backdrop-blur-sm">
+           <div className="bg-white w-full rounded-t-[3rem] p-8 pb-12 shadow-3xl animate-in slide-in-from-bottom duration-500 max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-8">
+                 <h3 className="font-black text-xl text-slate-900">Ayarlar</h3>
+                 <button onClick={()=>setIsSettingsOpen(false)} className="p-3 bg-slate-50 rounded-2xl text-slate-400"><X size={20}/></button>
               </div>
-              
-              <div className="space-y-8">
-                 {/* BULUT SUNUCU REHBERİ */}
-                 <div className="bg-emerald-50 p-8 rounded-[2.5rem] border border-emerald-100 space-y-4">
-                    <div className="flex items-center space-x-3 text-emerald-600">
-                       <CloudLightning size={24} />
-                       <span className="font-black text-sm uppercase">24/7 Bulut Takibi (Önerilir)</span>
-                    </div>
-                    <p className="text-[11px] text-emerald-800 font-medium leading-relaxed">
-                      Vercel "serverless" olduğu için tarayıcıyı kapattığınızda takip durur. 24 saat kesintisiz Telegram bildirimi almak için sistemle birlikte gelen <b>worker.js</b> dosyasını bir sunucuda çalıştırın.
-                    </p>
-                    <button className="flex items-center space-x-2 text-[10px] font-black text-emerald-600 uppercase bg-white px-4 py-2 rounded-xl shadow-sm border border-emerald-200">
-                       <ExternalLink size={14}/> <span>Railway/Render Kurulum Rehberi</span>
-                    </button>
+              <div className="space-y-6">
+                 <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Bildirim Eşiği (%)</label>
+                    <input type="number" value={userSettings.buyJumpThreshold} onChange={e=>setUserSettings({...userSettings, buyJumpThreshold: Number(e.target.value)})} className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-sm font-bold outline-none focus:border-indigo-500"/>
                  </div>
-
-                 <div className="space-y-6">
-                    <div className="bg-slate-50 p-6 rounded-3xl border">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Telegram Bot Token</label>
-                        <input type="password" value={userSettings.telegramBotToken} onChange={e=>setUserSettings({...userSettings, telegramBotToken: e.target.value})} placeholder="Bot Token" className="w-full bg-white border rounded-2xl p-4 text-sm font-mono outline-none"/>
-                    </div>
-                    <div className="bg-slate-50 p-6 rounded-3xl border">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Telegram Sohbet ID</label>
-                        <input type="text" value={userSettings.telegramChatId} onChange={e=>setUserSettings({...userSettings, telegramChatId: e.target.value})} placeholder="Sohbet ID" className="w-full bg-white border rounded-2xl p-4 text-sm font-mono outline-none"/>
-                    </div>
+                 <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Telegram Bot Token</label>
+                    <input type="password" value={userSettings.telegramBotToken} onChange={e=>setUserSettings({...userSettings, telegramBotToken: e.target.value})} placeholder="78234..." className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-xs font-mono outline-none focus:border-indigo-500"/>
                  </div>
-                 <button onClick={()=>setIsSettingsOpen(false)} className="w-full py-7 bg-emerald-600 text-white rounded-[2rem] font-black uppercase text-xs tracking-[0.5em] shadow-2xl">AYARLARI KAYDET</button>
+                 <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Sohbet ID</label>
+                    <input type="text" value={userSettings.telegramChatId} onChange={e=>setUserSettings({...userSettings, telegramChatId: e.target.value})} placeholder="-100..." className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-xs font-mono outline-none focus:border-indigo-500"/>
+                 </div>
+                 <button onClick={()=>setIsSettingsOpen(false)} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-indigo-200">AYARLARI KAYDET</button>
               </div>
            </div>
         </div>
