@@ -1,17 +1,17 @@
 
 /**
  * SENTINEL 24/7 BACKGROUND WORKER
- * Bu dosyayı bir Node.js ortamında çalıştırın.
- * npm install ws node-fetch
+ * Bu dosyayı bir Node.js ortamında (Railway, Render, VPS vb.) çalıştırın.
+ * Gerekli paketler: npm install ws node-fetch
  */
 
 const WebSocket = require('ws');
 const fetch = require('node-fetch');
 
-// AYARLAR (Burayı kendi bilgilerinizle doldurun veya environment variable kullanın)
+// AYARLAR (Çalıştırmadan önce doldurun)
 const TELEGRAM_TOKEN = 'BURAYA_BOT_TOKEN_YAZIN';
 const CHAT_ID = 'BURAYA_CHAT_ID_YAZIN';
-const PUMP_THRESHOLD = 30; // %30 ve üzeri
+const PUMP_THRESHOLD = 30; // %30 sıçrama eşiği
 
 let activeAlerts = {}; // symbol -> { messageId, time }
 
@@ -19,14 +19,14 @@ async function updateTelegram(symbol, change, price) {
     const now = Date.now();
     const prev = activeAlerts[symbol];
 
-    // 10 saniyede bir güncelleme kuralı (Sohbeti kirletmemek için)
+    // 10 saniyede bir güncelleme (Sohbeti temiz tutar)
     if (prev && (now - prev.time < 10000)) return;
 
     const text = `🚀 *${symbol} AKTİF TAKİP*\n\n` +
                  `📈 Değişim: %${change.toFixed(2)}\n` +
                  `💵 Fiyat: $${price}\n` +
-                 `⏰ Sunucu Saati: ${new Date().toLocaleTimeString('tr-TR')}\n\n` +
-                 `☁️ Sentinel 24/7 Bulut Modu`;
+                 `⏰ Zaman: ${new Date().toLocaleTimeString('tr-TR')}\n\n` +
+                 `☁️ Sentinel Bulut Modu Aktif`;
 
     const method = prev ? 'editMessageText' : 'sendMessage';
     const body = {
@@ -45,22 +45,23 @@ async function updateTelegram(symbol, change, price) {
         const data = await response.json();
         
         if (data.ok) {
+            // Edit olsa da olmasa da message_id'yi sakla
             activeAlerts[symbol] = { id: prev ? prev.id : data.result.message_id, time: now };
-            console.log(`[SENTINEL] ${symbol} %${change.toFixed(2)} - Mesaj Güncellendi.`);
+            console.log(`[OK] ${symbol} Güncellendi: %${change.toFixed(2)}`);
         } else {
-            // Eğer mesaj silinmişse veya hata varsa takibi sıfırla ki yeni mesaj atsın
+            // Hata durumunda (mesaj silinmişse vb.) takibi sıfırla
             delete activeAlerts[symbol];
         }
     } catch (err) {
-        console.error('Telegram API Hatası:', err);
+        console.error('[HATA] Telegram API:', err);
     }
 }
 
 function connect() {
-    console.log('Binance Futures Radarı Başlatılıyor...');
+    console.log('--- SENTINEL 24/7 ÇALIŞIYOR ---');
     const ws = new WebSocket('wss://fstream.binance.com/ws/!ticker@arr');
 
-    ws.on('open', () => console.log('Bağlantı Kuruldu.'));
+    ws.on('open', () => console.log('Bağlantı kuruldu, piyasa taranıyor...'));
     
     ws.on('message', (data) => {
         const tickers = JSON.parse(data);
@@ -72,18 +73,18 @@ function connect() {
             if (change >= PUMP_THRESHOLD) {
                 updateTelegram(t.s, change, price);
             } else if (activeAlerts[t.s] && change < (PUMP_THRESHOLD - 5)) {
-                // Eşiğin altına düştüyse takibi listeden çıkar
+                // Fiyat %25 altına düşerse (5 puanlık marj) takibi bitir
                 delete activeAlerts[t.s];
             }
         });
     });
 
     ws.on('close', () => {
-        console.log('Bağlantı koptu, 5sn sonra yeniden denenecek...');
+        console.log('Bağlantı kesildi, 5 saniye içinde yeniden denenecek...');
         setTimeout(connect, 5000);
     });
 
-    ws.on('error', (err) => console.error('Bağlantı Hatası:', err));
+    ws.on('error', (err) => console.error('[HATA] WebSocket:', err));
 }
 
 connect();
