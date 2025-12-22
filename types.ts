@@ -18,13 +18,6 @@ export interface Kline {
   volume: number;
 }
 
-export interface NewsItem {
-  title: string;
-  source: string;
-  url: string;
-  published_at: string;
-}
-
 export interface FuturesMetrics {
   fundingRate: number;
   openInterest: number;
@@ -67,17 +60,10 @@ export interface MarketTicker {
   high: number;
   low: number;
   volume: number;
+  vScore?: number; // Volume-based Potential Score
+  trend?: 'UP' | 'DOWN' | 'NEUTRAL';
 }
 
-export interface OrderLog {
-  id: string;
-  timestamp: string;
-  symbol?: string;
-  action: 'SCANNING' | 'ALERT' | 'INFO' | 'SUCCESS' | 'WARNING' | 'TELEGRAM_SENT';
-  message: string;
-}
-
-// Added Position interface to resolve compilation error in PositionList.tsx
 export interface Position {
   symbol: string;
   stage: string;
@@ -90,7 +76,6 @@ export interface Position {
   totalFees: number;
 }
 
-// Added PumpCandidate interface to resolve compilation error in PumpScanner.tsx
 export interface PumpCandidate {
   symbol: string;
   lastPrice: number;
