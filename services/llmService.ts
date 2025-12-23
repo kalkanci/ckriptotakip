@@ -8,14 +8,16 @@ export const llmService = {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
       const prompt = `Varlık: ${ticker.symbol}
-Şu anki fiyat: ${ticker.lastPrice}
-Yükseliş oranı: %${ticker.priceChangePercent}
+Son Fiyat: ${ticker.lastPrice}
+24s Değişim: %${ticker.priceChangePercent}
+Hacim Gücü (vScore): ${ticker.vScore}
 
-Mum Verileri:
-${history.slice(-30).map(k => `${k.close > k.open ? 'Yükseliş' : 'Düşüş'} Fiyat:${k.close}`).join('\n')}
+Son Mumlar (15dk):
+${history.slice(-10).map(k => `Açılış: ${k.open}, Kapanış: ${k.close}, Hacim: ${k.volume}`).join('\n')}
 
-Lütfen bu durumu çok basit, finansal terimlerden uzak, sanki bir arkadaşına anlatıyormuş gibi yorumla. 
-Yükselişin yorulup yorulmadığını ve fiyatın aşağı düşme ihtimalini (SHORT) değerlendir.
+Lütfen bu verileri profesyonel bir trader gözüyle incele. 
+5x Kaldıraçlı işlem için en karlı yönü (LONG veya SHORT) belirle.
+Kaldıraçlı işlemlerde likidasyon riskini minimize edecek bir Stop-Loss ve %5-10 net kar hedefli bir Take-Profit seviyesi öner.
 Sadece JSON formatında yanıt ver.`;
 
       const response = await ai.models.generateContent({
@@ -28,24 +30,26 @@ Sadece JSON formatında yanıt ver.`;
             properties: {
               score: { 
                 type: Type.NUMBER,
-                description: "0 ile 1 arası düşüş ihtimali puanı. 1 çok yüksek ihtimal." 
+                description: "Sinyal güven skoru (0-1). 0.8 üzeri güçlüdür." 
+              },
+              direction: {
+                type: Type.STRING,
+                description: "İşlem yönü: 'LONG' veya 'SHORT'"
               },
               rationale_tr: { 
                 type: Type.STRING, 
-                description: "Yeni başlayanlar için basit, samimi ve anlaşılır analiz açıklaması." 
+                description: "Neden bu işlemi önerdiğini açıklayan kısa, net analiz." 
               },
+              entry_price: { type: Type.NUMBER },
+              stop_loss: { type: Type.NUMBER },
+              take_profit: { type: Type.NUMBER },
               confidence: { type: Type.NUMBER },
               risk_estimate: { type: Type.NUMBER },
-              top_features: { type: Type.ARRAY, items: { type: Type.STRING } },
-              recommended_params: {
-                type: Type.OBJECT,
-                properties: { take_profit_price: { type: Type.NUMBER } },
-                required: ["take_profit_price"]
-              }
+              top_features: { type: Type.ARRAY, items: { type: Type.STRING } }
             },
-            required: ["score", "rationale_tr", "confidence", "risk_estimate", "top_features"]
+            required: ["score", "direction", "rationale_tr", "entry_price", "stop_loss", "take_profit", "confidence", "risk_estimate", "top_features"]
           },
-          systemInstruction: "Sen kripto para dünyasını yeni öğrenen birine rehberlik eden, samimi ve teknik terimlerden kaçınan bir analiz uzmanısın. Yanıtlarını sadece JSON olarak ver."
+          systemInstruction: "Sen 5x kaldıraçlı işlemler için yüksek isabetli sinyaller üreten bir algoritmasın. Amacın zarar ettirmeyecek, hacim onaylı giriş noktaları bulmaktır. Yanıtlarını sadece JSON olarak ver."
         }
       });
 
