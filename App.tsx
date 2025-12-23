@@ -8,11 +8,22 @@ import {
   BarChart2, ShieldCheck, Volume2,
   RefreshCcw, Filter, AlertTriangle, TrendingUpDown,
   PieChart, BarChart3, Globe, Waves, Target, ShieldAlert,
-  Calculator, TrendingUpDown as TrendIcon, Wallet, ArrowRight
+  Calculator, TrendingUpDown as TrendIcon, Wallet, ArrowRight,
+  Info, TrendingDown as DownIcon, TrendingUp as UpIcon, AlertCircle,
+  Play, StopCircle, RefreshCw, Gauge, Flame, BarChart
 } from 'lucide-react';
 import { MarketTicker, UserSettings, LLMAnalysis, Kline, FuturesMetrics } from './types';
 import { binanceService } from './services/binanceService';
 import { llmService } from './services/llmService';
+
+interface SimulatedTrade {
+  symbol: string;
+  entryPrice: number;
+  amount: number;
+  leverage: number;
+  direction: 'LONG' | 'SHORT';
+  startTime: number;
+}
 
 const App: React.FC = () => {
   const [userSettings, setUserSettings] = useState<UserSettings>(() => {
@@ -35,10 +46,9 @@ const App: React.FC = () => {
   const [filterType, setFilterType] = useState<'all' | 'gainers' | 'losers' | 'potential'>('all');
   const [minVolume, setMinVolume] = useState(0); 
 
-  // Simülatör Ayarları
+  // Simülatör State
   const [simAmount, setSimAmount] = useState(100);
-  const [simLeverage, setSimLeverage] = useState(5);
-  const [simDirection, setSimDirection] = useState<'LONG' | 'SHORT'>('LONG');
+  const [activeSimTrade, setActiveSimTrade] = useState<SimulatedTrade | null>(null);
 
   const [analyzingSymbol, setAnalyzingSymbol] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<any | null>(null);
@@ -52,10 +62,12 @@ const App: React.FC = () => {
     localStorage.setItem('sentinel_pro_settings', JSON.stringify(userSettings));
   }, [userSettings]);
 
+  // Scoring Logic: Hacim, Fiyat ve Momentum entegrasyonu
   const calculatePotential = (ticker: MarketTicker): number => {
     const absChange = Math.abs(ticker.priceChangePercent);
     const volumeImpact = Math.log10(ticker.volume + 1) / 4.5;
-    const score = (absChange * 0.6) + (volumeImpact * 40);
+    const trendFactor = ticker.trend === 'UP' || ticker.trend === 'DOWN' ? 15 : 0;
+    const score = (absChange * 0.5) + (volumeImpact * 35) + trendFactor;
     return Math.min(score, 100);
   };
 
@@ -66,7 +78,6 @@ const App: React.FC = () => {
     if (score < 80) return;
     if (prev && (now - prev.time < 300000)) return; 
 
-    const trendEmoji = change >= 0 ? '📈' : '📉';
     const text = `🎯 *SENTINEL: 5X SİNYAL ONAYI*\n\n` +
                  `💎 Varlık: #${symbol.replace('USDT','')}\n` +
                  `🔥 Güç Skoru: %${score.toFixed(0)}\n` +
@@ -117,7 +128,7 @@ const App: React.FC = () => {
           const ticker: MarketTicker = { 
             symbol: t.s, lastPrice: price, priceChangePercent: change, 
             high: parseFloat(t.h), low: parseFloat(t.l), volume: parseFloat(t.q),
-            trend: change > 2 ? 'UP' : (change < -2 ? 'DOWN' : 'NEUTRAL')
+            trend: change > 2.5 ? 'UP' : (change < -2.5 ? 'DOWN' : 'NEUTRAL')
           };
           ticker.vScore = calculatePotential(ticker);
           tickerBuffer.current[t.s] = ticker;
@@ -134,7 +145,7 @@ const App: React.FC = () => {
   , [allFutures]);
 
   const trendingAssets = useMemo(() => 
-    [...allFutures].sort((a,b) => Math.abs(b.priceChangePercent) - Math.abs(a.priceChangePercent)).slice(0, 10)
+    [...allFutures].sort((a,b) => Math.abs(b.priceChangePercent) - Math.abs(a.priceChangePercent)).slice(0, 12)
   , [allFutures]);
 
   const marketStats = useMemo(() => {
@@ -162,6 +173,28 @@ const App: React.FC = () => {
     return result;
   }, [allFutures, searchQuery, sortConfig, filterType, minVolume]);
 
+  const getActiveSimStats = () => {
+    if (!activeSimTrade) return null;
+    const currentTicker = tickerBuffer.current[activeSimTrade.symbol];
+    if (!currentTicker) return null;
+    const currentPrice = currentTicker.lastPrice;
+    const entry = activeSimTrade.entryPrice;
+    const lev = activeSimTrade.leverage;
+    let priceChangePct = ((currentPrice - entry) / entry) * 100;
+    if (activeSimTrade.direction === 'SHORT') priceChangePct = -priceChangePct;
+    const pnlPct = priceChangePct * lev;
+    const pnlUsd = (activeSimTrade.amount * pnlPct) / 100;
+    return { currentPrice, pnlPct, pnlUsd, isProfit: pnlUsd >= 0 };
+  };
+
+  const startSimTrade = (symbol: string, direction: 'LONG' | 'SHORT') => {
+    const ticker = tickerBuffer.current[symbol];
+    if (!ticker) return;
+    setActiveSimTrade({
+      symbol, entryPrice: ticker.lastPrice, amount: simAmount, leverage: 5, direction, startTime: Date.now()
+    });
+  };
+
   return (
     <div className="flex flex-col h-screen bg-[#F1F5F9] text-slate-900 overflow-hidden font-sans select-none">
       {/* HEADER */}
@@ -183,41 +216,117 @@ const App: React.FC = () => {
       {/* MAIN VIEWPORT */}
       <main className="flex-1 overflow-hidden relative">
         
-        {/* TAB 1: RADAR */}
+        {/* TAB 1: RADAR (ENRICHED DESIGN) */}
         <div className={`absolute inset-0 transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] flex ${activeTab !== 'radar' ? '-translate-x-full opacity-0 scale-95' : 'translate-x-0 opacity-100 scale-100'}`}>
-          <div className="w-full flex-shrink-0 overflow-y-auto px-4 py-6 pb-32 custom-scrollbar bg-slate-50">
-            <div className="max-w-6xl mx-auto flex flex-col md:flex-row gap-6">
-               <div className="flex-1 space-y-4">
-                  <div className="flex items-center justify-between px-2">
-                     <div className="flex items-center space-x-2"><Zap size={16} className="text-amber-500 fill-amber-500" /><span className="text-[11px] font-black text-slate-600 uppercase tracking-widest">5X AI TAHMİNLERİ</span></div>
+          <div className="w-full flex-shrink-0 overflow-y-auto px-6 py-8 pb-32 custom-scrollbar bg-slate-50">
+            <div className="max-w-6xl mx-auto space-y-10">
+               
+               {/* Market Pulse Header */}
+               <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl">
+                  <div className="relative z-10">
+                     <div className="flex items-center space-x-2 mb-2">
+                        <Gauge size={18} className="text-indigo-400" />
+                        <span className="text-[10px] font-black uppercase tracking-[0.3em] opacity-60">SENTINEL PİYASA NABZI</span>
+                     </div>
+                     <h2 className="text-3xl font-black italic tracking-tighter uppercase">FIRSAT RADARI AKTİF</h2>
+                     <p className="text-xs font-bold opacity-40 mt-1 uppercase tracking-widest italic">Binance Futures Canlı Analizi</p>
                   </div>
-                  <div className="space-y-3">
+                  <div className="flex items-center space-x-8 relative z-10">
+                     <div className="text-center">
+                        <div className="text-3xl font-black text-emerald-400">%{((marketStats.gainers/marketStats.total)*100).toFixed(0)}</div>
+                        <div className="text-[9px] font-black uppercase opacity-40">BOĞA GÜCÜ</div>
+                     </div>
+                     <div className="w-[1px] h-12 bg-white/10" />
+                     <div className="text-center">
+                        <div className="text-3xl font-black text-indigo-400">{marketStats.total}</div>
+                        <div className="text-[9px] font-black uppercase opacity-40">AKTİF VARLIK</div>
+                     </div>
+                  </div>
+                  <Waves className="absolute -bottom-10 -right-10 text-white/5 w-64 h-64 rotate-45" />
+               </div>
+
+               {/* Signal Grid */}
+               <div className="space-y-6">
+                  <div className="flex items-center justify-between px-4">
+                     <div className="flex items-center space-x-2">
+                        <Flame size={18} className="text-orange-500 animate-pulse" />
+                        <span className="text-xs font-black text-slate-600 uppercase tracking-[0.3em]">EN GÜÇLÜ SİNYALLER</span>
+                     </div>
+                     <span className="text-[10px] font-bold text-slate-400 uppercase italic">Algoritmik Puanlama</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                      {aiSignals.map((c) => (
-                       <div key={c.symbol} onClick={() => handleQuickAnalysis(c.symbol)} className="bg-white border border-slate-200 p-5 rounded-[2rem] flex items-center justify-between group hover:border-indigo-500 shadow-sm transition-all cursor-pointer">
-                          <div className="flex items-center space-x-4"><div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-xs ${c.priceChangePercent >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>{c.symbol.replace('USDT','')[0]}</div><div><span className="font-black text-base uppercase tracking-tight text-slate-900">{c.symbol.replace('USDT','')}</span><div className="text-[9px] font-black text-indigo-500 uppercase tracking-widest mt-0.5">Potansiyel: %{c.vScore?.toFixed(0)}</div></div></div>
-                          <div className="text-right"><div className={`text-xs font-black px-2 py-0.5 rounded-lg mb-1 inline-block ${c.priceChangePercent >= 0 ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>{c.priceChangePercent >= 0 ? 'LONG' : 'SHORT'}</div><div className="text-sm font-black text-slate-900 italic">${c.lastPrice}</div></div>
+                       <div key={c.symbol} onClick={() => handleQuickAnalysis(c.symbol)} className="bg-white border border-slate-200 p-6 rounded-[2.5rem] flex flex-col justify-between group hover:border-indigo-500 shadow-sm hover:shadow-xl transition-all cursor-pointer relative overflow-hidden">
+                          <div className="flex justify-between items-start mb-6">
+                             <div className="flex items-center space-x-4">
+                                <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center text-white font-black text-lg italic tracking-tighter">{c.symbol.replace('USDT','')[0]}</div>
+                                <div>
+                                   <div className="font-black text-xl text-slate-900 tracking-tight leading-none uppercase">{c.symbol.replace('USDT','')}</div>
+                                   <div className="text-[9px] font-bold text-slate-400 uppercase mt-1 italic">${c.lastPrice}</div>
+                                </div>
+                             </div>
+                             <div className={`text-[10px] font-black px-3 py-1 rounded-xl shadow-sm ${c.priceChangePercent >= 0 ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>
+                                {c.priceChangePercent >= 0 ? 'LONG' : 'SHORT'}
+                             </div>
+                          </div>
+
+                          <div className="space-y-4">
+                             <div className="flex justify-between items-end">
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">GÜÇ SKORU</span>
+                                <span className="text-xl font-black italic text-indigo-600">%{c.vScore?.toFixed(0)}</span>
+                             </div>
+                             <div className="h-2 w-full bg-slate-50 rounded-full overflow-hidden border border-slate-100">
+                                <div className="h-full bg-indigo-500 transition-all duration-1000" style={{ width: `${c.vScore}%` }} />
+                             </div>
+                          </div>
+                          
+                          {/* Rich Data Points */}
+                          <div className="grid grid-cols-2 gap-2 mt-6 pt-6 border-t border-slate-100">
+                             <div className="flex items-center space-x-2">
+                                <BarChart size={12} className="text-slate-300" />
+                                <span className="text-[9px] font-black text-slate-500 uppercase">HACİM: {(c.volume/1000000).toFixed(1)}M</span>
+                             </div>
+                             <div className="flex items-center space-x-2">
+                                <TrendingUp size={12} className="text-slate-300" />
+                                <span className="text-[9px] font-black text-slate-500 uppercase">DĞŞ: %{c.priceChangePercent.toFixed(1)}</span>
+                             </div>
+                          </div>
+
+                          <div className="absolute top-0 right-0 w-16 h-16 bg-indigo-50/20 rounded-bl-[4rem] flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                             <ChevronRight size={18} />
+                          </div>
                        </div>
                      ))}
                   </div>
                </div>
-               <div className="flex-1 space-y-4">
-                  <div className="flex items-center justify-between px-2">
-                     <div className="flex items-center space-x-2"><TrendingUpDown size={16} className="text-slate-400" /><span className="text-[11px] font-black text-slate-600 uppercase tracking-widest">PİYASA MOMENTUMU</span></div>
+
+               {/* Market Overview List */}
+               <div className="bg-white rounded-[3rem] p-8 border border-slate-200">
+                  <div className="flex items-center space-x-3 mb-8">
+                     <Activity size={20} className="text-indigo-500" />
+                     <h3 className="text-lg font-black uppercase tracking-tight italic">Genel Momentum</h3>
                   </div>
-                  <div className="space-y-2">
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-8 gap-y-6">
                      {trendingAssets.map((c, i) => (
-                       <div key={c.symbol} onClick={() => handleQuickAnalysis(c.symbol)} className="bg-white border border-slate-100 p-4 rounded-2xl flex items-center justify-between group hover:bg-slate-900 hover:text-white transition-all cursor-pointer">
-                          <div className="flex items-center space-x-4"><span className="text-[10px] font-black text-slate-300 w-4 italic">{i+1}</span><span className="font-black text-sm uppercase tracking-tight">{c.symbol.replace('USDT','')}</span></div>
-                          <div className="flex items-center space-x-4 text-right"><div><div className={`text-sm font-black ${c.priceChangePercent >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{c.priceChangePercent >= 0 ? '+' : ''}{c.priceChangePercent.toFixed(1)}%</div><div className="text-[9px] font-bold text-slate-400 uppercase">${(c.volume/1000000).toFixed(1)}M</div></div></div>
+                       <div key={c.symbol} onClick={() => handleQuickAnalysis(c.symbol)} className="flex items-center justify-between group cursor-pointer border-b border-slate-50 pb-2 hover:border-slate-200 transition-all">
+                          <div className="flex items-center space-x-3">
+                             <span className="text-[10px] font-black text-slate-300 italic">#{(i+1).toString().padStart(2,'0')}</span>
+                             <span className="font-black text-xs text-slate-700 group-hover:text-indigo-600">{c.symbol.replace('USDT','')}</span>
+                          </div>
+                          <span className={`text-[10px] font-black italic ${c.priceChangePercent >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                             {c.priceChangePercent >= 0 ? '+' : ''}{c.priceChangePercent.toFixed(1)}%
+                          </span>
                        </div>
                      ))}
                   </div>
                </div>
+
             </div>
           </div>
         </div>
 
-        {/* TAB 2: LIST & STATS */}
+        {/* TAB 2: LIST (UNTOUCHED PER USER REQUEST) */}
         <div className={`absolute inset-0 transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] flex flex-col bg-white ${activeTab !== 'list' ? 'translate-x-full opacity-0' : 'translate-x-0 opacity-100'}`}>
            <div className="flex-1 overflow-y-auto pb-32 custom-scrollbar">
               <div className="px-6 py-8 space-y-6 max-w-5xl mx-auto">
@@ -236,98 +345,167 @@ const App: React.FC = () => {
            </div>
         </div>
 
-        {/* TAB 3: SIMULATOR (NEW) */}
-        <div className={`absolute inset-0 transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] flex flex-col bg-slate-50 ${activeTab !== 'calc' ? 'translate-y-full opacity-0' : 'translate-y-0 opacity-100'}`}>
-           <div className="flex-1 overflow-y-auto pb-32 custom-scrollbar">
-              <div className="px-6 py-8 space-y-8 max-w-4xl mx-auto">
-                 <div>
-                    <h1 className="text-3xl font-black text-slate-900 tracking-tighter italic uppercase">Kar/Zarar Simülatörü</h1>
-                    <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1 italic">"Eğer işlem açsaydım ne olurdu?"</p>
+        {/* TAB 3: SIMULATOR (ENHANCED LIVE PNL) */}
+        <div className={`absolute inset-0 transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] flex flex-col bg-[#F8FAFC] ${activeTab !== 'calc' ? 'translate-y-full opacity-0' : 'translate-y-0 opacity-100'}`}>
+           <div className="flex-1 overflow-y-auto pb-40 custom-scrollbar">
+              <div className="px-6 py-10 space-y-8 max-w-4xl mx-auto">
+                 
+                 <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-3xl font-black text-slate-900 tracking-tight italic uppercase italic">Kazanç İzleyici</h1>
+                        <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Cebindeki parayı canlı izle</p>
+                    </div>
+                    {!activeSimTrade && (
+                      <div className="flex flex-col items-end">
+                         <label className="text-[9px] font-black text-slate-400 uppercase mb-1">KASA MİKTARI ($)</label>
+                         <div className="flex items-center space-x-2 bg-white px-5 py-3 rounded-2xl border-2 border-slate-100 shadow-sm">
+                            <span className="text-indigo-600 font-black text-lg">$</span>
+                            <input type="number" value={simAmount} onChange={e => setSimAmount(Number(e.target.value))} className="w-20 bg-transparent font-black text-slate-900 text-xl outline-none"/>
+                         </div>
+                      </div>
+                    )}
                  </div>
 
-                 {/* Simulator Controls */}
-                 <div className="bg-white p-8 rounded-[3rem] shadow-xl shadow-slate-200/40 border border-slate-100 grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="space-y-2">
-                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center space-x-2"><Wallet size={12}/> <span>Yatırım Tutarı ($)</span></label>
-                       <input type="number" value={simAmount} onChange={e => setSimAmount(Number(e.target.value))} className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 font-black text-xl text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20"/>
-                    </div>
-                    <div className="space-y-2">
-                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center space-x-2"><Target size={12}/> <span>Kaldıraç (x)</span></label>
-                       <input type="number" value={simLeverage} onChange={e => setSimLeverage(Number(e.target.value))} className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 font-black text-xl text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20"/>
-                    </div>
-                    <div className="space-y-2">
-                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center space-x-2"><TrendIcon size={12}/> <span>İşlem Yönü</span></label>
-                       <div className="flex p-1 bg-slate-50 border border-slate-200 rounded-2xl">
-                          <button onClick={() => setSimDirection('LONG')} className={`flex-1 py-2 rounded-xl text-[10px] font-black transition-all ${simDirection === 'LONG' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-slate-400 hover:text-slate-600'}`}>LONG</button>
-                          <button onClick={() => setSimDirection('SHORT')} className={`flex-1 py-2 rounded-xl text-[10px] font-black transition-all ${simDirection === 'SHORT' ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20' : 'text-slate-400 hover:text-slate-600'}`}>SHORT</button>
-                       </div>
-                    </div>
-                 </div>
-
-                 {/* Simulation Results */}
-                 <div className="space-y-4">
-                    <div className="flex items-center space-x-3 text-slate-500 px-1">
-                       <Brain size={16} className="text-indigo-500" />
-                       <span className="text-[11px] font-black uppercase tracking-[0.2em]">Potansiyel Varlıklarda Canlı Simülasyon</span>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-4">
-                       {aiSignals.map((c) => {
-                          const positionSize = simAmount * simLeverage;
-                          // %5 ve %10'luk hareket simülasyonu
-                          const profit5Pct = positionSize * 0.05;
-                          const loss3Pct = positionSize * 0.03;
-                          
+                 {activeSimTrade ? (
+                    /* AKTİF POZİSYON EKRANI */
+                    <div className="space-y-6">
+                       {(() => {
+                          const stats = getActiveSimStats();
+                          if (!stats) return null;
                           return (
-                            <div key={c.symbol} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-6 group hover:shadow-md transition-all">
-                               <div className="flex items-center space-x-4 w-full sm:w-auto">
-                                  <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center text-white font-black text-sm uppercase italic">{c.symbol.substring(0,2)}</div>
-                                  <div>
-                                     <div className="font-black text-lg text-slate-900 leading-none">{c.symbol.replace('USDT','')}</div>
-                                     <div className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mt-1.5 italic">GÜNCEL: ${c.lastPrice}</div>
+                            <div className="bg-white rounded-[4rem] p-10 shadow-3xl border border-slate-100 relative overflow-hidden group">
+                               <div className="flex justify-between items-start mb-12 relative z-10">
+                                  <div className="flex items-center space-x-6">
+                                     <div className="w-20 h-20 bg-slate-900 rounded-[2rem] flex items-center justify-center text-white font-black text-3xl italic tracking-tighter shadow-2xl group-hover:scale-105 transition-all">
+                                        {activeSimTrade.symbol.replace('USDT','')}
+                                     </div>
+                                     <div>
+                                        <div className="flex items-center space-x-3">
+                                           <span className={`px-4 py-1.5 rounded-xl text-[10px] font-black italic uppercase ${activeSimTrade.direction === 'LONG' ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>
+                                              {activeSimTrade.direction} 5X KALDIRAÇ
+                                           </span>
+                                        </div>
+                                        <div className="text-4xl font-black text-slate-900 tracking-tighter uppercase mt-2">{activeSimTrade.symbol}</div>
+                                     </div>
+                                  </div>
+                                  <div className="text-right p-4 bg-slate-50 rounded-[2rem] border border-slate-100">
+                                     <div className="text-[9px] font-black text-slate-400 uppercase mb-1">GİRİŞ FİYATI</div>
+                                     <div className="text-2xl font-mono font-black text-slate-900 italic">${activeSimTrade.entryPrice}</div>
                                   </div>
                                </div>
 
-                               <div className="grid grid-cols-2 gap-4 w-full sm:flex-1 sm:max-w-md">
-                                  <div className="bg-emerald-50/50 border border-emerald-100 p-4 rounded-3xl flex flex-col items-center">
-                                     <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-1">+%5 Kar Hedefi</span>
-                                     <span className="text-xl font-black text-emerald-700 leading-none">+${profit5Pct.toFixed(1)}</span>
-                                     <span className="text-[9px] font-bold text-emerald-500/70 mt-1 uppercase tracking-tighter">Bakiye: ${(simAmount + profit5Pct).toFixed(0)}$</span>
+                               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
+                                  <div className={`p-10 rounded-[3rem] border-4 flex flex-col items-center justify-center space-y-3 transition-all duration-300 ${stats.isProfit ? 'bg-emerald-50 border-emerald-100 shadow-2xl shadow-emerald-500/10' : 'bg-rose-50 border-rose-100 shadow-2xl shadow-rose-500/10'}`}>
+                                     <span className={`text-[12px] font-black uppercase tracking-[0.4em] ${stats.isProfit ? 'text-emerald-600' : 'text-rose-600'}`}>NET KAZANÇ ($)</span>
+                                     <div className={`text-7xl font-black italic tracking-tighter ${stats.isProfit ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                        {stats.isProfit ? '+' : ''}${stats.pnlUsd.toFixed(2)}
+                                     </div>
+                                     <div className={`text-2xl font-black opacity-60 ${stats.isProfit ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                        %{stats.pnlPct.toFixed(2)}
+                                     </div>
                                   </div>
-                                  <div className="bg-rose-50/50 border border-rose-100 p-4 rounded-3xl flex flex-col items-center">
-                                     <span className="text-[9px] font-black text-rose-600 uppercase tracking-widest mb-1">-%3 Stop-Loss</span>
-                                     <span className="text-xl font-black text-rose-700 leading-none">-${loss3Pct.toFixed(1)}</span>
-                                     <span className="text-[9px] font-bold text-rose-500/70 mt-1 uppercase tracking-tighter">Bakiye: ${(simAmount - loss3Pct).toFixed(0)}$</span>
+
+                                  <div className="bg-slate-900 p-10 rounded-[3rem] flex flex-col justify-between text-white relative overflow-hidden shadow-2xl">
+                                     <div>
+                                        <div className="flex justify-between items-center mb-6">
+                                           <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">GÜNCEL FİYAT</span>
+                                           <RefreshCw size={18} className="text-indigo-400 animate-spin-slow" />
+                                        </div>
+                                        <div className="text-5xl font-mono font-black text-white tracking-tighter italic">
+                                           ${stats.currentPrice}
+                                        </div>
+                                     </div>
+                                     <div className="flex items-center space-x-3 mt-8 pt-8 border-t border-white/10">
+                                        <div className="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center">
+                                           <Activity size={16} />
+                                        </div>
+                                        <span className="text-[11px] font-bold text-white/50 italic">Anlık veriler Binance'den geliyor...</span>
+                                     </div>
+                                     <Waves className="absolute -bottom-10 -right-10 text-white/5 w-48 h-48 rotate-12" />
                                   </div>
                                </div>
 
-                               <button onClick={() => handleQuickAnalysis(c.symbol)} className="p-3 bg-slate-100 rounded-2xl text-slate-400 group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-inner"><ArrowRight size={20}/></button>
+                               <button 
+                                 onClick={() => setActiveSimTrade(null)}
+                                 className="w-full mt-10 py-7 bg-slate-900 text-white rounded-[2.5rem] font-black uppercase text-xs tracking-[0.6em] flex items-center justify-center space-x-4 active:scale-95 transition-all shadow-3xl"
+                               >
+                                  <StopCircle size={22} className="text-rose-500" />
+                                  <span>İşlemi Sonlandır ve Kar Al</span>
+                               </button>
+
+                               <Waves className="absolute -top-20 -left-20 text-indigo-50/20 w-80 h-80 opacity-40 rotate-12" />
                             </div>
                           );
-                       })}
+                       })()}
                     </div>
-                 </div>
+                 ) : (
+                    /* SEÇİM EKRANI - Sinyallerden Başlat */
+                    <div className="space-y-8">
+                       <div className="bg-indigo-600 p-8 rounded-[3rem] text-white flex items-center space-x-6 shadow-2xl shadow-indigo-200">
+                          <Play size={40} className="shrink-0 fill-white" />
+                          <div>
+                             <h4 className="text-xl font-black uppercase italic tracking-tight">İşlem Simülatörü</h4>
+                             <p className="text-sm font-medium opacity-80 leading-relaxed mt-1">Aşağıdaki potansiyel coinlerden birini seçerek {simAmount}$ ile 5x kaldıraçlı canlı takibi başlatabilirsin.</p>
+                          </div>
+                       </div>
+
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {aiSignals.map((c) => (
+                             <div key={c.symbol} className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col items-center justify-between gap-8 hover:shadow-xl transition-all group">
+                                <div className="flex flex-col items-center text-center">
+                                   <div className="w-16 h-16 bg-slate-50 rounded-[1.5rem] border border-slate-100 flex items-center justify-center font-black text-slate-400 text-xl italic mb-4 group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-inner">{c.symbol.substring(0,2)}</div>
+                                   <div>
+                                      <div className="font-black text-2xl text-slate-900 tracking-tighter uppercase">{c.symbol}</div>
+                                      <div className="text-[11px] font-mono font-bold text-indigo-500 mt-1 italic tracking-widest">${c.lastPrice}</div>
+                                   </div>
+                                </div>
+
+                                <div className="flex space-x-3 w-full">
+                                   <button 
+                                     onClick={() => startSimTrade(c.symbol, 'LONG')}
+                                     className="flex-1 px-4 py-4 bg-emerald-500 text-white rounded-[1.5rem] font-black text-[11px] uppercase tracking-widest shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
+                                   >
+                                      LONG GİR
+                                   </button>
+                                   <button 
+                                     onClick={() => startSimTrade(c.symbol, 'SHORT')}
+                                     className="flex-1 px-4 py-4 bg-rose-500 text-white rounded-[1.5rem] font-black text-[11px] uppercase tracking-widest shadow-lg shadow-rose-500/20 active:scale-95 transition-all"
+                                   >
+                                      SHORT GİR
+                                   </button>
+                                </div>
+                             </div>
+                          ))}
+                       </div>
+                    </div>
+                 )}
               </div>
            </div>
         </div>
       </main>
 
-      {/* NAVIGATION BAR (Updated for 3rd Tab) */}
-      <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] w-[280px]">
+      {/* NAVIGATION BAR */}
+      <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] w-[300px]">
         <div className="bg-slate-900 border border-slate-800 p-1.5 rounded-[2rem] shadow-2xl flex items-center relative overflow-hidden">
            <div className={`absolute top-1.5 bottom-1.5 w-[calc(33.33%-4px)] bg-indigo-600 rounded-3xl transition-all duration-500 cubic-bezier(0.34, 1.56, 0.64, 1) ${activeTab === 'radar' ? 'left-1.5' : activeTab === 'list' ? 'left-[calc(33.33%+1.33px)]' : 'left-[calc(66.66%+0.66px)]'}`} />
-           <button onClick={() => setActiveTab('radar')} className={`flex-1 flex items-center justify-center space-x-1.5 h-11 rounded-3xl relative z-10 transition-colors ${activeTab === 'radar' ? 'text-white' : 'text-slate-500'}`}><Zap size={14} /><span className="text-[9px] font-black uppercase tracking-widest">RADAR</span></button>
-           <button onClick={() => setActiveTab('list')} className={`flex-1 flex items-center justify-center space-x-1.5 h-11 rounded-3xl relative z-10 transition-colors ${activeTab === 'list' ? 'text-white' : 'text-slate-500'}`}><Activity size={14} /><span className="text-[9px] font-black uppercase tracking-widest">LİSTE</span></button>
-           <button onClick={() => setActiveTab('calc')} className={`flex-1 flex items-center justify-center space-x-1.5 h-11 rounded-3xl relative z-10 transition-colors ${activeTab === 'calc' ? 'text-white' : 'text-slate-500'}`}><Calculator size={14} /><span className="text-[9px] font-black uppercase tracking-widest">SİM</span></button>
+           <button onClick={() => setActiveTab('radar')} className={`flex-1 flex items-center justify-center space-x-2 h-11 rounded-3xl relative z-10 transition-colors ${activeTab === 'radar' ? 'text-white' : 'text-slate-500'}`}><Zap size={14} /><span className="text-[9px] font-black uppercase tracking-widest">RADAR</span></button>
+           <button onClick={() => setActiveTab('list')} className={`flex-1 flex items-center justify-center space-x-2 h-11 rounded-3xl relative z-10 transition-colors ${activeTab === 'list' ? 'text-white' : 'text-slate-500'}`}><Activity size={14} /><span className="text-[9px] font-black uppercase tracking-widest">LİSTE</span></button>
+           <button onClick={() => setActiveTab('calc')} className={`flex-1 flex items-center justify-center space-x-2 h-11 rounded-3xl relative z-10 transition-colors ${activeTab === 'calc' ? 'text-white' : 'text-slate-500'}`}><Calculator size={14} /><span className="text-[9px] font-black uppercase tracking-widest">SİM</span></button>
         </div>
       </div>
 
-      {/* ANALYSIS MODAL */}
+      {/* ANALYSIS MODAL (REMAINS SAME) */}
       {analyzingSymbol && (
         <div className="fixed inset-0 z-[1000] bg-black/40 backdrop-blur-sm flex items-end justify-center">
            <div className="bg-white w-full max-w-2xl rounded-t-[3.5rem] overflow-hidden shadow-3xl animate-in slide-in-from-bottom duration-500 flex flex-col max-h-[95vh]">
               <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center">
-                 <div className="flex items-center space-x-4"><div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center text-white font-black text-xl">{analyzingSymbol?.replace('USDT','')[0]}</div><div><h3 className="font-black text-2xl uppercase tracking-tighter text-slate-900 leading-none">{analyzingSymbol}</h3><span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mt-1.5 inline-block">5X Kaldıraç Sinyali</span></div></div>
+                 <div className="flex items-center space-x-4">
+                    <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center text-white font-black text-xl">{analyzingSymbol?.replace('USDT','')[0]}</div>
+                    <div>
+                        <h3 className="font-black text-2xl uppercase tracking-tighter text-slate-900 leading-none">{analyzingSymbol}</h3>
+                        <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mt-1.5 inline-block">5X Kaldıraç Sinyali</span>
+                    </div>
+                 </div>
                  <button onClick={() => setAnalyzingSymbol(null)} className="p-3 bg-slate-50 rounded-2xl text-slate-400 hover:text-slate-900 transition-colors"><X size={24}/></button>
               </div>
               <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
@@ -356,7 +534,7 @@ const App: React.FC = () => {
       {isSettingsOpen && (
         <div className="fixed inset-0 z-[2000] flex items-end bg-black/60 backdrop-blur-md">
            <div className="bg-white w-full rounded-t-[3.5rem] p-8 pb-12 shadow-3xl animate-in slide-in-from-bottom duration-500 max-h-[90vh] overflow-y-auto custom-scrollbar">
-              <div className="flex justify-between items-center mb-10"><div><h3 className="font-black text-3xl text-slate-900 tracking-tight leading-none uppercase italic">Ayarlar</h3><span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] block mt-2">Algoritma Ayarları</span></div><button onClick={()=>setIsSettingsOpen(false)} className="p-3 bg-slate-50 rounded-2xl text-slate-400"><X size={28}/></button></div>
+              <div className="flex justify-between items-center mb-10"><div><h3 className="font-black text-3xl text-slate-900 tracking-tight leading-none uppercase italic">Ayarlar</h3><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mt-2">Algoritma Ayarları</span></div><button onClick={()=>setIsSettingsOpen(false)} className="p-3 bg-slate-50 rounded-2xl text-slate-400"><X size={28}/></button></div>
               <div className="space-y-8"><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100 shadow-inner"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">Sinyal Hassasiyeti (vScore)</label><input type="number" value={userSettings.buyJumpThreshold} onChange={e=>setUserSettings({...userSettings, buyJumpThreshold: Number(e.target.value)})} className="w-full bg-transparent text-3xl font-black outline-none text-slate-900 italic"/></div><div className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100 shadow-inner"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">Min. Hacim (Milyon $)</label><input type="number" value={minVolume} onChange={e=>setMinVolume(Number(e.target.value))} className="w-full bg-transparent text-3xl font-black outline-none text-slate-900 italic"/></div></div><div className="bg-slate-50 p-8 rounded-[3rem] border border-slate-100 space-y-5"><div className="flex items-center space-x-3 text-slate-400 mb-2"><CloudLightning size={20} /><span className="text-[11px] font-black uppercase tracking-widest">Telegram Bildirim Servisi</span></div><input type="password" value={userSettings.telegramBotToken} onChange={e=>setUserSettings({...userSettings, telegramBotToken: e.target.value})} placeholder="Bot Token" className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-xs font-mono outline-none text-slate-700"/><input type="text" value={userSettings.telegramChatId} onChange={e=>setUserSettings({...userSettings, telegramChatId: e.target.value})} placeholder="Chat ID" className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-xs font-mono outline-none text-slate-700"/><p className="text-[10px] text-slate-400 font-bold italic px-2">Sadece vScore &gt; 80 olan yüksek isabetli sinyaller bildirim olarak gönderilir.</p></div><button onClick={()=>setIsSettingsOpen(false)} className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black uppercase text-xs tracking-[0.5em] shadow-xl shadow-indigo-200 active:scale-95 transition-all mt-6">UYGULA VE AKTİFLEŞTİR</button></div>
            </div>
         </div>
