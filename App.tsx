@@ -123,7 +123,6 @@ const App: React.FC = () => {
     return () => { clearInterval(loop); unsub(); binanceService.disconnect(); };
   }, [userSettings]);
 
-  // Radar logic: Sadece en yüksek potansiyelliler sinyal olarak kabul edilir
   const aiSignals = useMemo(() => 
     [...allFutures].filter(c => c.vScore && c.vScore > 65).sort((a,b) => (b.vScore || 0) - (a.vScore || 0)).slice(0, 10)
   , [allFutures]);
@@ -132,7 +131,6 @@ const App: React.FC = () => {
     [...allFutures].sort((a,b) => Math.abs(b.priceChangePercent) - Math.abs(a.priceChangePercent)).slice(0, 10)
   , [allFutures]);
 
-  // Market Stats Calculation
   const marketStats = useMemo(() => {
     const total = allFutures.length;
     if (total === 0) return { total: 0, gainers: 0, losers: 0, avgVScore: 0, totalVol: 0 };
@@ -160,7 +158,6 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen bg-[#F1F5F9] text-slate-900 overflow-hidden font-sans select-none">
-      {/* HEADER */}
       <header className="h-14 bg-white border-b border-slate-100 flex items-center justify-between px-6 shrink-0 z-[100] shadow-sm">
         <div className="flex items-center space-x-3">
           <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white font-black shadow-lg">S</div>
@@ -179,14 +176,10 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      {/* MAIN VIEWPORT */}
       <main className="flex-1 overflow-hidden relative">
-        {/* RADAR VIEW (SIGNAL FOCUS) */}
         <div className={`absolute inset-0 transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] flex ${activeTab === 'list' ? '-translate-x-full opacity-0 scale-95' : 'translate-x-0 opacity-100 scale-100'}`}>
           <div className="w-full flex-shrink-0 overflow-y-auto px-4 py-6 pb-32 custom-scrollbar bg-slate-50">
             <div className="max-w-6xl mx-auto flex flex-col md:flex-row gap-6">
-               
-               {/* RADAR LEFT: AI SIGNALS */}
                <div className="flex-1 space-y-4">
                   <div className="flex items-center justify-between px-2">
                      <div className="flex items-center space-x-2">
@@ -220,7 +213,6 @@ const App: React.FC = () => {
                   </div>
                </div>
 
-               {/* RADAR RIGHT: TREND ASSETS */}
                <div className="flex-1 space-y-4">
                   <div className="flex items-center justify-between px-2">
                      <div className="flex items-center space-x-2">
@@ -248,15 +240,12 @@ const App: React.FC = () => {
                      ))}
                   </div>
                </div>
-
             </div>
           </div>
         </div>
 
-        {/* LIST VIEW (STATISTICS FOCUS) */}
         <div className={`absolute inset-0 transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] flex flex-col bg-white ${activeTab === 'radar' ? 'translate-x-full opacity-0' : 'translate-x-0 opacity-100'}`}>
            <div className="flex-1 overflow-y-auto pb-32 custom-scrollbar">
-              
               <div className="px-6 py-8 space-y-6 max-w-5xl mx-auto">
                  <div className="flex items-center justify-between">
                     <div>
@@ -268,7 +257,6 @@ const App: React.FC = () => {
                     </div>
                  </div>
 
-                 {/* Dash Grid */}
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative">
                     <div className="bg-white p-8 rounded-[3rem] shadow-xl shadow-slate-200/40 border border-slate-100 flex flex-col items-center sm:flex-row sm:items-center justify-between overflow-hidden relative">
                        <div className="relative w-36 h-36 shrink-0">
@@ -307,7 +295,6 @@ const App: React.FC = () => {
                  </div>
               </div>
 
-              {/* LIST UI */}
               <div className="max-w-5xl mx-auto px-6 space-y-4">
                  <div className="flex flex-col sm:flex-row gap-4 items-center justify-between py-6 border-t border-slate-100">
                     <div className="relative w-full sm:w-80">
@@ -355,7 +342,6 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      {/* NAVIGATION BAR */}
       <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] w-[240px]">
         <div className="bg-slate-900 border border-slate-800 p-1.5 rounded-[2rem] shadow-2xl flex items-center relative overflow-hidden">
            <div className={`absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] bg-indigo-600 rounded-3xl transition-all duration-500 cubic-bezier(0.34, 1.56, 0.64, 1) ${activeTab === 'list' ? 'left-[calc(50%+3px)]' : 'left-1.5'}`} />
@@ -364,7 +350,6 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      {/* ANALYSIS MODAL (BOTTOM DRAWER) */}
       {analyzingSymbol && (
         <div className="fixed inset-0 z-[1000] bg-black/40 backdrop-blur-sm flex items-end justify-center">
            <div className="bg-white w-full max-w-2xl rounded-t-[3.5rem] overflow-hidden shadow-3xl animate-in slide-in-from-bottom duration-500 flex flex-col max-h-[95vh]">
@@ -389,7 +374,6 @@ const App: React.FC = () => {
                    </div>
                 ) : (
                   <>
-                    {/* Signal Recommendation Card */}
                     {analysisResult && (
                       <div className={`p-8 rounded-[3rem] shadow-2xl relative overflow-hidden group ${analysisResult.direction === 'LONG' ? 'bg-emerald-600' : 'bg-rose-600'} text-white`}>
                          <div className="flex items-center justify-between mb-6 relative z-10">
@@ -457,7 +441,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* SETTINGS DRAWER */}
       {isSettingsOpen && (
         <div className="fixed inset-0 z-[2000] flex items-end bg-black/60 backdrop-blur-md">
            <div className="bg-white w-full rounded-t-[3.5rem] p-8 pb-12 shadow-3xl animate-in slide-in-from-bottom duration-500 max-h-[90vh] overflow-y-auto custom-scrollbar">
@@ -488,7 +471,7 @@ const App: React.FC = () => {
                     </div>
                     <input type="password" value={userSettings.telegramBotToken} onChange={e=>setUserSettings({...userSettings, telegramBotToken: e.target.value})} placeholder="Bot Token" className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-xs font-mono outline-none text-slate-700"/>
                     <input type="text" value={userSettings.telegramChatId} onChange={e=>setUserSettings({...userSettings, telegramChatId: e.target.value})} placeholder="Chat ID" className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-xs font-mono outline-none text-slate-700"/>
-                    <p className="text-[10px] text-slate-400 font-bold italic px-2">Sadece vScore > 80 olan yüksek isabetli sinyaller bildirim olarak gönderilir.</p>
+                    <p className="text-[10px] text-slate-400 font-bold italic px-2">Sadece vScore &gt; 80 olan yüksek isabetli sinyaller bildirim olarak gönderilir.</p>
                  </div>
 
                  <button onClick={()=>setIsSettingsOpen(false)} className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black uppercase text-xs tracking-[0.5em] shadow-xl shadow-indigo-200 active:scale-95 transition-all mt-6">UYGULA VE AKTİFLEŞTİR</button>
